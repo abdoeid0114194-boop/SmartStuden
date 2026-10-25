@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -344,7 +346,7 @@ fun ProfileTab(modifier: Modifier = Modifier) {
     var isDarkTheme by remember { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(true) }
 
-    Column(modifier.fillMaxSize().background(Color(0xFFF3F4F6))) {
+    Column(modifier.fillMaxSize().background(Color(0xFFF3F4F6)).verticalScroll(rememberScrollState())) {
         // هيدر البروفايل
         Box(
             Modifier.fillMaxWidth().height(200.dp).background(
