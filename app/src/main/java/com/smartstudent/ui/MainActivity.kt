@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import kotlinx.coroutines.Dispatchers
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,7 +93,11 @@ interface AIEngine {
 }
 
 class GeminiAIEngine : AIEngine {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+    .connectTimeout(30, TimeUnit.SECONDS)
+    .readTimeout(30, TimeUnit.SECONDS)
+    .writeTimeout(30, TimeUnit.SECONDS)
+    .build()
     private val apiKey = BuildConfig.GEMINI_API_KEY
 
     private suspend fun callGemini(prompt: String): AIResponse = withContext(Dispatchers.IO) {
