@@ -1,4 +1,4 @@
-hereplugins {
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
@@ -18,9 +18,9 @@ android {
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
     }
 
-    buildFeatures { 
-        compose = true 
-        buildConfig = true 
+    buildFeatures {
+        compose = true
+        buildConfig = true
     }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.13" }
     kotlinOptions { jvmTarget = "17" }
@@ -29,7 +29,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     packaging {
-        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
     }
 }
 
@@ -46,10 +48,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
-    
+
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
-    
+
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("junit:junit:4.13.2")
