@@ -196,7 +196,8 @@ fun MainScreen(alarmRepository: AlarmRepository, aiEngine: AIEngine) {
         }
     ) { padding ->
         when (selectedTab) {
-            0 -> AlarmTab(alarmRepository, Modifier.padding(padding))
+            // هنا كان الخطأ، ضفنا aiEngine
+            0 -> AlarmTab(alarmRepository, aiEngine, Modifier.padding(padding)) 
             1 -> AIChatTab(aiEngine, Modifier.padding(padding))
             else -> ExamTab(aiEngine, Modifier.padding(padding))
         }
@@ -204,7 +205,8 @@ fun MainScreen(alarmRepository: AlarmRepository, aiEngine: AIEngine) {
 }
 
 @Composable
-fun AlarmTab(alarmRepository: AlarmRepository, modifier: Modifier = Modifier) {
+// هنا كمان ضفنا aiEngine للباراميترز
+fun AlarmTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modifier = Modifier) {
     var alarms by remember { mutableStateOf<List<AlarmEntity>>(emptyList()) }
     var showDialog by remember { mutableStateOf(false) }
     var scheduleResult by remember { mutableStateOf("") }
