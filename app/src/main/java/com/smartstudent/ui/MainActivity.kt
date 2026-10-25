@@ -261,7 +261,7 @@ fun AlarmTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Mod
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(Icons.Default.MagicButton, contentDescription = null)
+                        Icon(Icons.Default.AutoFixHigh, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
                         Text("جدولة تلقائية", fontWeight = FontWeight.Bold)
                     }
