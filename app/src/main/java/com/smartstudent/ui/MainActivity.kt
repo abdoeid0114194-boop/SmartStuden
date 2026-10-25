@@ -33,10 +33,16 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
 import java.util.Calendar
+import com.smartstudent.BuildConfig
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import com.google.gson.JsonParser
 
-// ... (نفس كلاسات البيانات والمحركات زي ما هي) ...
+// كلاسات البيانات
 data class AlarmEntity(
     val id: Long = 0L,
     val title: String,
@@ -87,13 +93,61 @@ interface AIEngine {
     suspend fun autoSchedule(schedule: String): AIResponse
 }
 
-class MockAIEngine : AIEngine {
-    override suspend fun generateExam(subject: String, years: List<Int>, types: List<String>) =
-        AIResponse(listOf(Candidate(Content(listOf(Part("امتحان $subject\nالسنوات: ${years.joinToString(", ")}\n\n1. السؤال الأول…\n2. السؤال الثاني…"))))))
-    override suspend fun explain(subject: String, topic: String, level: String) =
-        AIResponse(listOf(Candidate(Content(listOf(Part("شرح $topic:\n- التعريف…\n- مثال…"))))))
-    override suspend fun autoSchedule(schedule: String) =
-        AIResponse(listOf(Candidate(Content(listOf(Part("الجدول المقترح:\n08:00 رياضيات\n09:15 فيزياء"))))))
+// --- محرك الذكاء الاصطناعي الحقيقي (Gemini) ---
+class GeminiAIEngine : AIEngine {
+    private val client = OkHttpClient()
+    private val apiKey = BuildConfig.GEMINI_API_KEY
+
+    private suspend fun callGemini(prompt: String): AIResponse = withContext(Dispatchers.IO) {
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+        
+        val jsonPayload = """
+            {
+              "contents": [{
+                "parts":[{"text": "$prompt"}]
+              }]
+            }
+        """.trimIndent()
+
+        val request = Request.Builder()
+            .url(url)
+            .post(jsonPayload.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        try {
+            val response = client.newCall(request).execute()
+            val responseBody = response.body?.string() ?: ""
+            
+            val jsonObject = JsonParser.parseString(responseBody).asJsonObject
+            val candidates = jsonObject.getAsJsonArray("candidates")
+            
+            if (candidates != null && candidates.size() > 0) {
+                val parts = candidates[0].asJsonObject.getAsJsonObject("content").getAsJsonArray("parts")
+                val text = parts[0].asJsonObject.get("text").asString
+                return@withContext AIResponse(listOf(Candidate(Content(listOf(Part(text))))))
+            }
+            return@withContext AIResponse(listOf(Candidate(Content(listOf(Part("لم يتم تلقي رد من الذكاء الاصطناعي."))))))
+            
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext AIResponse(listOf(Candidate(Content(listOf(Part("حدث خطأ في الاتصال بالذكاء الاصطناعي. تأكد من اتصالك بالإنترنت."))))))
+        }
+    }
+
+    override suspend fun generateExam(subject: String, years: List<Int>, types: List<String>): AIResponse {
+        val prompt = "أنت معلم خبير. قم بتوليد امتحان لمادة $subject للسنوات ${years.joinToString(", ")}. أنواع الأسئلة المطلوبة: ${types.joinToString(", ")}. اكتب الأسئلة باللغة العربية الفصحى."
+        return callGemini(prompt)
+    }
+
+    override suspend fun explain(subject: String, topic: String, level: String): AIResponse {
+        val prompt = "أنت مساعد دراسي ذكي. اشرح لي موضوع '$topic' في مادة '$subject' بطريقة بسيطة ومفيدة باللغة العربية."
+        return callGemini(prompt)
+    }
+
+    override suspend fun autoSchedule(schedule: String): AIResponse {
+        val prompt = "أنت مساعد لتنظيم الوقت. اقترح جدولاً دراسياً متوازناً بناءً على هذه الملاحظات: $schedule. اكتب الجدول باللغة العربية."
+        return callGemini(prompt)
+    }
 }
 
 object TimeUtil {
@@ -106,7 +160,7 @@ object TimeUtil {
 
 class MainActivity : ComponentActivity() {
     private val alarmRepo: AlarmRepository = MockAlarmRepository()
-    private val aiEngine: AIEngine = MockAIEngine()
+    private val aiEngine: AIEngine = GeminiAIEngine() // استخدمنا المحرك الحقيقي هنا
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,12 +177,12 @@ fun SmartStudentTheme(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         MaterialTheme(
             colorScheme = lightColorScheme(
-                primary = Color(0xFF1E88E5), // أزرق احترافي
+                primary = Color(0xFF1E88E5),
                 onPrimary = Color.White,
                 primaryContainer = Color(0xFFE3F2FD),
                 onPrimaryContainer = Color(0xFF0D47A1),
-                secondary = Color(0xFF43A047), // أخضر حيوي
-                background = Color(0xFFF4F7F6), // خلفية فاتحة مريحة للعين
+                secondary = Color(0xFF43A047),
+                background = Color(0xFFF4F7F6),
                 surface = Color.White,
                 onSurface = Color(0xFF1A1A1A)
             ),
@@ -164,7 +218,7 @@ fun MainScreen(alarmRepository: AlarmRepository, aiEngine: AIEngine) {
             NavigationBar(
                 containerColor = Color.White,
                 tonalElevation = 8.dp,
-                modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) // حواف دائرية للشريط السفلي
+                modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
             ) {
                 tabs.forEachIndexed { index, label ->
                     NavigationBarItem(
@@ -191,7 +245,6 @@ fun MainScreen(alarmRepository: AlarmRepository, aiEngine: AIEngine) {
             }
         }
     ) { padding ->
-        // أنيميشن ناعم عند التنقل بين الشاشات
         AnimatedContent(targetState = selectedTab, label = "TabTransition") { targetTab ->
             when (targetTab) {
                 0 -> AlarmTab(alarmRepository, aiEngine, Modifier.padding(padding))
@@ -207,6 +260,7 @@ fun AlarmTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Mod
     var alarms by remember { mutableStateOf<List<AlarmEntity>>(emptyList()) }
     var showDialog by remember { mutableStateOf(false) }
     var scheduleResult by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -232,7 +286,6 @@ fun AlarmTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Mod
             }
         }
 
-        // كارت الذكاء الاصطناعي بتصميم متدرج (Gradient) احترافي
         Card(
             Modifier.fillMaxWidth().shadow(12.dp, RoundedCornerShape(24.dp)),
             shape = RoundedCornerShape(24.dp),
@@ -253,17 +306,23 @@ fun AlarmTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Mod
                     Text("دع الذكاء الاصطناعي ينظم جدولك بأفضل طريقة ممكنة.", color = Color.White.copy(alpha = 0.9f))
                     Button(
                         onClick = {
+                            isLoading = true
                             scope.launch {
                                 scheduleResult = aiEngine.autoSchedule("جدول").candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text.orEmpty()
+                                isLoading = false
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isLoading
                     ) {
-                        Icon(Icons.Default.AutoFixHigh, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("جدولة تلقائية", fontWeight = FontWeight.Bold)
+                        if(isLoading) CircularProgressIndicator(Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary)
+                        else {
+                            Icon(Icons.Default.AutoFixHigh, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("جدولة تلقائية", fontWeight = FontWeight.Bold)
+                        }
                     }
                     AnimatedVisibility(visible = scheduleResult.isNotBlank()) {
                         Text(scheduleResult, color = Color.White, style = MaterialTheme.typography.bodyMedium)
