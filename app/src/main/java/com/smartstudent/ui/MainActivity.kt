@@ -99,7 +99,7 @@ class GeminiAIEngine : AIEngine {
         if (apiKey.isBlank() || apiKey == "YOUR_API_KEY_HERE") {
             return@withContext AIResponse(listOf(Candidate(Content(listOf(Part("المفتاح السري غير موجود."))))))
         }
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
         val jsonPayload = """{"contents": [{"parts":[{"text": "$prompt"}]}]}""".trimIndent()
         val request = Request.Builder().url(url).post(jsonPayload.toRequestBody("application/json".toMediaType())).build()
         try {
