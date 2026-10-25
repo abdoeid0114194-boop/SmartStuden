@@ -15,8 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -84,17 +86,17 @@ interface AIEngine {
 class MockAIEngine : AIEngine {
     override suspend fun generateExam(subject: String, years: List<Int>, types: List<String>) =
         AIResponse(listOf(Candidate(Content(listOf(Part(
-            "Exam for $subject\nYears: ${years.joinToString(", ")}\nTypes: ${types.joinToString(", ")}\n\n1. Question 1…\n2. Question 2…\n3. Question 3…"
+            "امتحان في مادة $subject\nالسنوات: ${years.joinToString(", ")}\nالأنواع: ${types.joinToString(", ")}\n\n1. السؤال الأول…\n2. السؤال الثاني…\n3. السؤال الثالث…"
         ))))))
 
     override suspend fun explain(subject: String, topic: String, level: String) =
         AIResponse(listOf(Candidate(Content(listOf(Part(
-            "Explanation for $topic in $subject:\n- Definition…\n- Key concepts…\n- Example…"
+            "شرح لـ $topic في مادة $subject:\n- التعريف…\n- المفاهيم الأساسية…\n- مثال…"
         ))))))
 
     override suspend fun autoSchedule(schedule: String) =
         AIResponse(listOf(Candidate(Content(listOf(Part(
-            "Optimized schedule based on your input:\n08:00-09:00 Study Math\n09:15-10:15 Physics\n11:00-12:00 Chemistry\n..."
+            "الجدول المقترح بناءً على مدخلاتك:\n08:00-09:00 دراسة رياضيات\n09:15-10:15 فيزياء\n11:00-12:00 كيمياء\n..."
         ))))))
 }
 
@@ -129,41 +131,44 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SmartStudentTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = lightColorScheme(
-            primary = Color(0xFF4285F4),
-            onPrimary = Color.White,
-            primaryContainer = Color(0xFFD2E3FC),
-            onPrimaryContainer = Color(0xFF174EA6),
-            secondary = Color(0xFF34A853),
-            onSecondary = Color.White,
-            secondaryContainer = Color(0xFFA8F0C0),
-            onSecondaryContainer = Color(0xFF0D6525),
-            background = Color(0xFFF8F9FA),
-            onBackground = Color(0xFF202124),
-            surface = Color.White,
-            onSurface = Color(0xFF202124),
-            surfaceVariant = Color(0xFFF1F3F5),
-            onSurfaceVariant = Color(0xFF555555)
-        ),
-        typography = Typography(),
-        content = content
-    )
+    // هنا بنجبر التطبيق يشتغل من اليمين للشمال عشان اللغة العربية
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        MaterialTheme(
+            colorScheme = lightColorScheme(
+                primary = Color(0xFF4285F4),
+                onPrimary = Color.White,
+                primaryContainer = Color(0xFFD2E3FC),
+                onPrimaryContainer = Color(0xFF174EA6),
+                secondary = Color(0xFF34A853),
+                onSecondary = Color.White,
+                secondaryContainer = Color(0xFFA8F0C0),
+                onSecondaryContainer = Color(0xFF0D6525),
+                background = Color(0xFFF8F9FA),
+                onBackground = Color(0xFF202124),
+                surface = Color.White,
+                onSurface = Color(0xFF202124),
+                surfaceVariant = Color(0xFFF1F3F5),
+                onSurfaceVariant = Color(0xFF555555)
+            ),
+            typography = Typography(),
+            content = content
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(alarmRepository: AlarmRepository, aiEngine: AIEngine) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Alarms", "AI Chat", "Exams")
+    val tabs = listOf("المنبهات", "دردشة AI", "الامتحانات")
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SmartStudent", fontWeight = FontWeight.Bold) },
+                title = { Text("الطالب الذكي", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = {}) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                        Icon(Icons.Default.Settings, contentDescription = "الإعدادات")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -196,8 +201,7 @@ fun MainScreen(alarmRepository: AlarmRepository, aiEngine: AIEngine) {
         }
     ) { padding ->
         when (selectedTab) {
-            // هنا كان الخطأ، ضفنا aiEngine
-            0 -> AlarmTab(alarmRepository, aiEngine, Modifier.padding(padding)) 
+            0 -> AlarmTab(alarmRepository, aiEngine, Modifier.padding(padding))
             1 -> AIChatTab(aiEngine, Modifier.padding(padding))
             else -> ExamTab(aiEngine, Modifier.padding(padding))
         }
@@ -205,7 +209,6 @@ fun MainScreen(alarmRepository: AlarmRepository, aiEngine: AIEngine) {
 }
 
 @Composable
-// هنا كمان ضفنا aiEngine للباراميترز
 fun AlarmTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modifier = Modifier) {
     var alarms by remember { mutableStateOf<List<AlarmEntity>>(emptyList()) }
     var showDialog by remember { mutableStateOf(false) }
@@ -228,9 +231,9 @@ fun AlarmTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Mod
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Smart Alarms", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("المنبهات الذكية", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             IconButton(onClick = { showDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Alarm")
+                Icon(Icons.Default.Add, contentDescription = "إضافة منبه")
             }
         }
 
@@ -241,20 +244,20 @@ fun AlarmTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Mod
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("AI Schedule Suggestions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("اقتراحات الجدول بالذكاء الاصطناعي", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
-                Text("Let AI optimize your study timetable and avoid conflicts.", color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text("دع الذكاء الاصطناعي ينظم جدولك ويتجنب التعارضات.", color = MaterialTheme.colorScheme.onPrimaryContainer)
                 Button(
                     onClick = {
                         scope.launch {
-                            scheduleResult = aiEngine.autoSchedule("My study schedule").candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text.orEmpty()
+                            scheduleResult = aiEngine.autoSchedule("جدول دراستي").candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text.orEmpty()
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.AutoFixHigh, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Auto-Schedule")
+                    Text("جدولة تلقائية")
                 }
                 if (scheduleResult.isNotBlank()) Text(scheduleResult)
             }
@@ -313,7 +316,7 @@ fun AlarmCard(alarm: AlarmEntity, onToggle: (AlarmEntity) -> Unit, onDelete: (Al
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(TimeUtil.format(alarm.triggerAt), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 IconButton(onClick = { onDelete(alarm) }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    Icon(Icons.Default.Delete, contentDescription = "حذف")
                 }
             }
         }
@@ -333,8 +336,8 @@ fun EmptyStateCard() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(Icons.Default.Alarm, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-            Text("No active alarms", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Tap the + button to add a new alarm.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+            Text("لا توجد منبهات نشطة", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("اضغط على زر + لإضافة منبه جديد.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
         }
     }
 }
@@ -346,11 +349,11 @@ fun AddAlarmDialog(onDismiss: () -> Unit, onConfirm: (AlarmEntity) -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add New Alarm") },
+        title = { Text("إضافة منبه جديد") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Description (optional)") }, modifier = Modifier.fillMaxWidth(), maxLines = 2)
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("العنوان") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("الوصف (اختياري)") }, modifier = Modifier.fillMaxWidth(), maxLines = 2)
             }
         },
         confirmButton = {
@@ -365,9 +368,9 @@ fun AddAlarmDialog(onDismiss: () -> Unit, onConfirm: (AlarmEntity) -> Unit) {
                     )
                 },
                 enabled = title.isNotBlank()
-            ) { Text("Add") }
+            ) { Text("إضافة") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
     )
 }
 
@@ -381,8 +384,8 @@ fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
 
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("AI Chat", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("Ask any study question, and the AI will respond.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("دردشة الذكاء الاصطناعي", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("اسأل أي سؤال دراسي، وسيجيبك الذكاء الاصطناعي.", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Card(Modifier.fillMaxWidth().weight(1f), elevation = CardDefaults.cardElevation(2.dp)) {
             LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -393,7 +396,7 @@ fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
                             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                                    Text("Thinking...")
+                                    Text("جاري التفكير...")
                                 }
                             }
                         }
@@ -406,7 +409,7 @@ fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text("Type your question...") },
+                placeholder = { Text("اكتب سؤالك هنا...") },
                 leadingIcon = { Icon(Icons.Default.Chat, contentDescription = null) },
                 modifier = Modifier.weight(1f),
                 maxLines = 3
@@ -420,12 +423,12 @@ fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
                         loading = true
                         scope.launch {
                             try {
-                                val response = aiEngine.explain("General", query)
+                                val response = aiEngine.explain("عام", query)
                                 val reply = response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                                    ?: "Sorry, I couldn't generate a response."
+                                    ?: "عذراً، لم أستطع توليد رد."
                                 messages = messages + ChatMessage(reply, false)
                             } catch (e: Exception) {
-                                messages = messages + ChatMessage("Something went wrong: ${e.localizedMessage ?: "unknown error"}", false)
+                                messages = messages + ChatMessage("حدث خطأ: ${e.localizedMessage ?: "خطأ غير معروف"}", false)
                             } finally {
                                 loading = false
                             }
@@ -433,14 +436,14 @@ fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
                     }
                 },
                 modifier = Modifier.size(56.dp)
-            ) { Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.primary) }
+            ) { Icon(Icons.Default.Send, contentDescription = "إرسال", tint = MaterialTheme.colorScheme.primary) }
         }
 
-        Text("Quick topics:", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("مواضيع سريعة:", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QuickChip("Physics") { input = "Explain Newton's laws" }
-            QuickChip("Math") { input = "Solve quadratic equation example" }
-            QuickChip("Chemistry") { input = "Describe periodic table trends" }
+            QuickChip("فيزياء") { input = "اشرح قوانين نيوتن" }
+            QuickChip("رياضيات") { input = "حل مثال لمعادلة تربيعية" }
+            QuickChip("كيمياء") { input = "اشرح الجدول الدوري" }
         }
     }
 }
@@ -478,17 +481,17 @@ fun ExamTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
     var generating by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    val subjectOptions = listOf("Physics", "Mathematics", "Chemistry", "Biology", "English", "Arabic")
+    val subjectOptions = listOf("فيزياء", "رياضيات", "كيمياء", "أحياء", "إنجليزي", "عربي")
     val yearOptions = listOf(2020, 2021, 2022, 2023, 2024)
-    val typeOptions = listOf("Multiple Choice", "Short Answer", "Analytical")
+    val typeOptions = listOf("اختيار من متعدد", "إجابة قصيرة", "تحليلي")
 
     Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Exam Generator", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("Select criteria and generate a practice exam.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("مولد الامتحانات", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("اختر المعايير لتوليد امتحان تدريبي.", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Subject", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("المادة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(subjectOptions) { s ->
                         FilterChip(selected = subject == s, onClick = { subject = s }, label = { Text(s) })
@@ -499,7 +502,7 @@ fun ExamTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
 
         Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Past Years", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("السنوات السابقة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     yearOptions.forEach { year ->
                         FilterChip(
@@ -514,7 +517,7 @@ fun ExamTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
 
         Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Question Types", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("أنواع الأسئلة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 typeOptions.forEach { type ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
@@ -534,9 +537,9 @@ fun ExamTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
                 scope.launch {
                     try {
                         val response = aiEngine.generateExam(subject, years, types)
-                        result = response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "No result."
+                        result = response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "لا توجد نتيجة."
                     } catch (e: Exception) {
-                        result = "Failed to generate exam: ${e.localizedMessage ?: "unknown error"}"
+                        result = "فشل توليد الامتحان: ${e.localizedMessage ?: "خطأ غير معروف"}"
                     } finally {
                         generating = false
                     }
@@ -548,11 +551,11 @@ fun ExamTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
             if (generating) {
                 CircularProgressIndicator(Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                 Spacer(Modifier.width(8.dp))
-                Text("Generating...")
+                Text("جاري التوليد...")
             } else {
                 Icon(Icons.Default.Description, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Generate Exam")
+                Text("توليد الامتحان")
             }
         }
 
@@ -560,9 +563,9 @@ fun ExamTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
             Card(Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Generated Exam", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("الامتحان المولد", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         IconButton(onClick = { /* TODO: implement sharing */ }) {
-                            Icon(Icons.Default.Share, contentDescription = "Share")
+                            Icon(Icons.Default.Share, contentDescription = "مشاركة")
                         }
                     }
                     Text(result, style = MaterialTheme.typography.bodyMedium)
