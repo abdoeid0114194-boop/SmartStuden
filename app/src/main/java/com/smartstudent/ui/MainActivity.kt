@@ -1,61 +1,48 @@
+```kotlin
 @file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.smartstudent.ui
 
-import android.content.Context
-import android.os.Bundle
+import android.app.*
+import android.content.*
+import android.graphics.Color as AndroidColor
+import android.media.RingtoneManager
+import android.os.*
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.platform.*
+import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.*
+import androidx.compose.ui.unit.*
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.smartstudent.BuildConfig
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -65,16 +52,17 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
-import java.util.Calendar
+import java.util.*
 import java.util.concurrent.TimeUnit
 
-// =====================================================================
-//  البيانات والمنبهات (كما هي)
-// =====================================================================
-
+/* ── البيانات الأساسية ── */
 data class AlarmEntity(
-    val id: Long = 0L, val title: String, val description: String? = null,
-    val triggerAt: Long, val repeatInterval: Long? = null, val isActive: Boolean = true
+    val id: Long = 0L,
+    val title: String,
+    val description: String? = null,
+    val triggerAt: Long,
+    val repeatInterval: Long? = null,
+    val isActive: Boolean = true
 )
 
 interface AlarmRepository {
@@ -83,7 +71,6 @@ interface AlarmRepository {
     suspend fun removeAlarm(alarm: AlarmEntity)
     suspend fun updateAlarm(alarm: AlarmEntity)
 }
-
 class MockAlarmRepository : AlarmRepository {
     private val _alarms = MutableLiveData<List<AlarmEntity>>(emptyList())
     override val activeAlarms: LiveData<List<AlarmEntity>> get() = _alarms
@@ -99,28 +86,63 @@ class MockAlarmRepository : AlarmRepository {
     }
     override suspend fun updateAlarm(alarm: AlarmEntity) {
         val list = _alarms.value?.toMutableList() ?: mutableListOf()
-        val index = list.indexOfFirst { it.id == alarm.id }
-        if (index >= 0) list[index] = alarm
+        val idx = list.indexOfFirst { it.id == alarm.id }
+        if (idx >= 0) list[idx] = alarm
         _alarms.postValue(list)
     }
 }
 
+/* مناهج (فصول – دروس) */
+data class Lesson(val id: Long, val title: String, val content: String = "")
+data class Chapter(val id: Long, val title: String, val lessons: List<Lesson>)
+interface CurriculumRepository {
+    suspend fun getAllChapters(subject: String): List<Chapter>
+}
+class MockCurriculumRepository : CurriculumRepository {
+    private val dummy = mapOf(
+        "فيزياء" to listOf(
+            Chapter(1, "الحركة", listOf(
+                Lesson(1, "قانون السرعة"),
+                Lesson(2, "قانون التسارع")
+            )),
+            Chapter(2, "الطاقة", listOf(
+                Lesson(3, "الطاقة الحركية"),
+                Lesson(4, "الطاقة الكامنة")
+            ))
+        ),
+        "رياضيات" to listOf(
+            Chapter(3, "جبر", listOf(
+                Lesson(5, "معادلات خطية"),
+                Lesson(6, "متسلسلات")
+            )),
+            Chapter(4, "هندسة", listOf(
+                Lesson(7, "مثلثات"),
+                Lesson(8, "دوائر")
+            ))
+        )
+    )
+    override suspend fun getAllChapters(subject: String): List<Chapter> =
+        dummy[subject] ?: emptyList()
+}
+
+/* أدوات الوقت */
 object TimeUtil {
     fun nowMillis() = System.currentTimeMillis()
     fun format(millis: Long): String {
         val cal = Calendar.getInstance().apply { timeInMillis = millis }
         return String.format(
             "%02d-%02d-%d %02d:%02d",
-            cal.get(Calendar.DAY_OF_MONTH), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.YEAR),
-            cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE)
+            cal.get(Calendar.DAY_OF_MONTH),
+            cal.get(Calendar.MONTH) + 1,
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.HOUR_OF_DAY),
+            cal.get(Calendar.MINUTE)
         )
     }
+    fun currentYear(): Int = Calendar.getInstance().get(Calendar.YEAR)
 }
 
-// =====================================================================
-//  محرك الذكاء الاصطناعي (Gemini)
-// =====================================================================
-
+/* ── Gemini AI Engine ── */
 data class AIResponse(val candidates: List<Candidate>, val isError: Boolean = false)
 data class Candidate(val content: Content)
 data class Content(val parts: List<Part>)
@@ -128,24 +150,31 @@ data class Part(val text: String)
 
 data class ChatMessage(val text: String, val isUser: Boolean, val isError: Boolean = false)
 
-fun aiOk(text: String) = AIResponse(listOf(Candidate(Content(listOf(Part(text))))))
+fun aiOk(text: String) = AIResponse(listOf(Candidate(Content(listOf(Part(text)))))
 fun aiError(text: String) = AIResponse(listOf(Candidate(Content(listOf(Part(text))))), isError = true)
 fun AIResponse.text(): String = candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text.orEmpty()
 
 suspend fun safeAi(block: suspend () -> AIResponse): AIResponse =
-    try {
-        block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        aiError("حدث خطأ غير متوقع: ${e.javaClass.simpleName} - ${e.message}")
-    }
+    try { block() }
+    catch (e: CancellationException) { throw e }
+    catch (e: Exception) { aiError("خطأ غير متوقع: ${e.javaClass.simpleName} - ${e.message}") }
 
 interface AIEngine {
-    suspend fun generateExam(subject: String, years: List<Int>, types: List<String>): AIResponse
+    suspend fun generateExam(
+        subject: String,
+        years: List<Int>,
+        types: List<String>,
+        currentYear: Int
+    ): AIResponse
+
     suspend fun explain(subject: String, topic: String, level: String = "highschool"): AIResponse
     suspend fun autoSchedule(schedule: String): AIResponse
-    suspend fun chat(history: List<ChatMessage>): AIResponse
+    suspend fun chat(history: List<ChatMessage>, currentYear: Int): AIResponse
+    suspend fun generateInteractiveQuiz(
+        subject: String,
+        scopeText: String,
+        currentYear: Int
+    ): AIResponse
 }
 
 class GeminiAIEngine : AIEngine {
@@ -158,25 +187,10 @@ class GeminiAIEngine : AIEngine {
         .build()
 
     private val apiKey: String = BuildConfig.GEMINI_API_KEY.trim()
+    @Volatile private var preferredModel: String? = null
 
-    /** آخر موديل اشتغل بنجاح، بنجرّبه الأول في الطلبات الجاية. */
-    @Volatile
-    private var preferredModel: String? = null
-
-    private sealed class Attempt {
-        data class Ok(val text: String) : Attempt()
-        data class Retry(val reason: String, val notFound: Boolean = false) : Attempt()
-        data class Fatal(val message: String) : Attempt()
-    }
-
-    private class Failure {
-        var last: String = ""
-        var onlyNotFound: Boolean = true
-    }
-
-    // ---------- الواجهة العامة ----------
-
-    override suspend fun chat(history: List<ChatMessage>): AIResponse {
+    /* -- chat -- */
+    override suspend fun chat(history: List<ChatMessage>, currentYear: Int): AIResponse {
         val turns = mutableListOf<Pair<String, String>>()
         history.filter { !it.isError }.takeLast(14).forEach { m ->
             val role = if (m.isUser) "user" else "model"
@@ -188,35 +202,56 @@ class GeminiAIEngine : AIEngine {
         }
         while (turns.isNotEmpty() && turns.first().first != "user") turns.removeAt(0)
         if (turns.isEmpty()) return aiError("اكتب سؤالك أولًا.")
-        return generate(CHAT_SYSTEM, turns)
+        val sys = "$CHAT_SYSTEM (السنة الحالية $currentYear)"
+        return generate(sys, turns)
     }
 
-    override suspend fun generateExam(subject: String, years: List<Int>, types: List<String>): AIResponse {
+    /* -- generateExam -- */
+    override suspend fun generateExam(
+        subject: String,
+        years: List<Int>,
+        types: List<String>,
+        currentYear: Int
+    ): AIResponse {
         val yearsTxt = if (years.isEmpty()) "" else " على نمط امتحانات الثانوية العامة للسنوات ${years.sorted().joinToString("، ")}"
         val typesTxt = if (types.isEmpty()) "نوّع في أنواع الأسئلة." else "أنواع الأسئلة المطلوبة: ${types.joinToString("، ")}."
         val prompt = "اكتب امتحانًا في مادة $subject$yearsTxt. $typesTxt " +
-            "اجعله من 10 إلى 15 سؤالًا متدرجة الصعوبة، وابتكر أسئلة جديدة بنفس المستوى والنمط دون نسخ أسئلة حقيقية. " +
-            "اكتب في النهاية قسمًا بعنوان «الإجابات النموذجية»."
+                "اجعله من 10 إلى 15 سؤالًا متدرجة الصعوبة، وابتكر أسئلة جديدة بنفس المستوى والنمط دون نسخ أسئلة حقيقية. " +
+                "اكتب في النهاية قسمًا بعنوان «الإجابات النموذجية». " +
+                "السنة الحالية هي $currentYear."
         return generate(EXAM_SYSTEM, listOf("user" to prompt))
     }
 
+    /* -- explain -- */
     override suspend fun explain(subject: String, topic: String, level: String): AIResponse =
         generate(CHAT_SYSTEM, listOf("user" to "اشرح «$topic» في مادة $subject ببساطة وبالعربية مع مثال."))
 
+    /* -- autoSchedule -- */
     override suspend fun autoSchedule(schedule: String): AIResponse =
         generate(
             SCHEDULE_SYSTEM,
             listOf("user" to "دي مهامي الدراسية:\n$schedule\n\nاقترح لي جدولًا دراسيًا متوازنًا لليوم بالعربية.")
         )
 
-    // ---------- التنفيذ ----------
+    /* -- generateInteractiveQuiz -- */
+    override suspend fun generateInteractiveQuiz(
+        subject: String,
+        scopeText: String,
+        currentYear: Int
+    ): AIResponse {
+        val prompt = "اكتب اختبارًا تفاعليًا (Multiple‑Choice) باللغة العربية لمادة $subject " +
+                "حول: $scopeText. لكل سؤال قدّم 4 خيارات، ضع الإجابة الصحيحة داخل النص كالتالي: **(الإجابة الصحيحة)**. " +
+                "السنة الحالية: $currentYear."
+        return generate(CHAT_SYSTEM, listOf("user" to prompt))
+    }
 
+    /* ---------- تنفيذ طلب Gemini ---------- */
     private suspend fun generate(system: String, turns: List<Pair<String, String>>): AIResponse =
         withContext(Dispatchers.IO) {
             if (apiKey.isBlank() || apiKey == "YOUR_API_KEY_HERE") {
                 return@withContext aiError(
                     "مفتاح Gemini غير موجود داخل التطبيق.\n" +
-                        "تأكد إن الـ Secret اسمه مظبوط وإن ملف الـ workflow بيمرّره وقت البناء."
+                            "تأكد إن الـ Secret اسمه مظبوط وإن ملف الـ workflow يمرّره وقت البناء."
                 )
             }
             val body = buildBody(system, turns)
@@ -225,7 +260,6 @@ class GeminiAIEngine : AIEngine {
 
             tryModels(order, body, failure)?.let { return@withContext it }
 
-            // لو كل الأسماء طلعت 404، نسأل Google عن الموديلات المتاحة فعلًا لمفتاحك
             if (failure.onlyNotFound) {
                 val extra = discoverModels().filter { it !in order }.take(3)
                 tryModels(extra, body, failure)?.let { return@withContext it }
@@ -233,7 +267,7 @@ class GeminiAIEngine : AIEngine {
 
             aiError(
                 "تعذّر الحصول على رد من Gemini.\n${failure.last}\n" +
-                    "جرّب تاني بعد شوية، ولو فضلت المشكلة افتح الإنترنت من شبكة تانية."
+                        "جرّب تاني بعد شوية، ولو استمرت المشكلة افتح الإنترنت من شبكة تانية."
             )
         }
 
@@ -282,16 +316,11 @@ class GeminiAIEngine : AIEngine {
                     resp.isSuccessful -> parse(raw)
                     resp.code == 400 && (raw.contains("API key", true) || raw.contains("API_KEY")) ->
                         Attempt.Fatal("مفتاح Gemini غير صالح (400). أنشئ مفتاحًا جديدًا من Google AI Studio وحدّث الـ Secret.")
-                    resp.code == 400 ->
-                        Attempt.Fatal("الطلب غير مقبول (400): ${errorMessage(raw)}")
-                    resp.code == 401 || resp.code == 403 ->
-                        Attempt.Fatal("المفتاح مرفوض (${resp.code}): ${errorMessage(raw)}")
-                    resp.code == 404 ->
-                        Attempt.Retry("الموديل $model غير متاح (404).", notFound = true)
-                    resp.code == 429 ->
-                        Attempt.Retry("وصلت للحد المسموح من الطلبات على $model (429). استنى دقيقة وجرّب.")
-                    else ->
-                        Attempt.Retry("الخادم مشغول (${resp.code}) على $model.")
+                    resp.code == 400 -> Attempt.Fatal("الطلب غير مقبول (400): ${errorMessage(raw)}")
+                    resp.code == 401 || resp.code == 403 -> Attempt.Fatal("المفتاح مرفوض (${resp.code}): ${errorMessage(raw)}")
+                    resp.code == 404 -> Attempt.Retry("الموديل $model غير متاح (404).", notFound = true)
+                    resp.code == 429 -> Attempt.Retry("وصلت للحد المسموح من الطلبات على $model (429). استنى دقيقة وجرّب.")
+                    else -> Attempt.Retry("الخادم مشغول (${resp.code}) على $model.")
                 }
             }
         } catch (e: SocketTimeoutException) {
@@ -348,14 +377,9 @@ class GeminiAIEngine : AIEngine {
                     val name = o.optString("name").removePrefix("models/")
                     val methods = o.optJSONArray("supportedGenerationMethods")
                     var canGenerate = false
-                    if (methods != null) {
-                        for (j in 0 until methods.length()) {
-                            if (methods.getString(j) == "generateContent") canGenerate = true
-                        }
-                    }
-                    if (canGenerate && name.startsWith("gemini-") && name.contains("flash") &&
-                        EXCLUDED.none { name.contains(it) }
-                    ) out.add(name)
+                    if (methods != null) for (j in 0 until methods.length()) if (methods.getString(j) == "generateContent") canGenerate = true
+                    if (canGenerate && name.startsWith("gemini-") && name.contains("flash") && EXCLUDED.none { name.contains(it) })
+                        out.add(name)
                 }
                 out.sortedDescending()
             }
@@ -363,38 +387,36 @@ class GeminiAIEngine : AIEngine {
             emptyList()
         }
 
+    private sealed class Attempt {
+        data class Ok(val text: String) : Attempt()
+        data class Retry(val reason: String, val notFound: Boolean = false) : Attempt()
+        data class Fatal(val message: String) : Attempt()
+    }
+    private class Failure { var last = ""; var onlyNotFound = true }
+
     private companion object {
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
-
-        /** بالترتيب: الأحدث أولًا، وبعده بدائل أسرع. لو اسم اتقفل بيجرّب اللي بعده تلقائيًا. */
         val MODELS = listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite")
-
         val EXCLUDED = listOf(
             "image", "tts", "live", "audio", "embedding", "robotics",
             "vision", "thinking", "cyber", "exp", "computer", "native"
         )
-
         const val CHAT_SYSTEM =
             "أنت «الطالب الذكي»، مساعد دراسي لطلاب المرحلة الثانوية في مصر (المنهج المصري). " +
-                "أجب بالعربية الواضحة، وبلهجة مصرية بسيطة لو كتب الطالب بالعامية. " +
-                "اشرح خطوة بخطوة مع مثال عند الحاجة، وكن مختصرًا ودقيقًا. " +
-                "لو السؤال خارج الدراسة فأجب باختصار ثم شجّع الطالب على المذاكرة. " +
-                "استخدم عناوين قصيرة ونقاطًا فقط، ولا تستخدم الجداول."
-
+                    "أجب بالعربية الواضحة، وبلهجة مصرية بسيطة لو كتب الطالب بالعامية. " +
+                    "اشرح خطوة بخطوة مع مثال عند الحاجة، وكن مختصرًا ودقيقًا. " +
+                    "لو السؤال خارج الدراسة فأجب باختصار ثم شجّع الطالب على المذاكرة. " +
+                    "استخدم عناوين قصيرة ونقاطًا فقط، ولا تستخدم الجداول."
         const val EXAM_SYSTEM =
             "أنت معلم خبير في المنهج المصري للثانوية العامة. اكتب الأسئلة مرقمة وواضحة، " +
-                "ثم الإجابات النموذجية في النهاية. لا تستخدم الجداول."
-
+                    "ثم الإجابات النموذجية في النهاية. لا تستخدم الجداول."
         const val SCHEDULE_SYSTEM =
             "أنت مرشد دراسي للمرحلة الثانوية. اقترح جدولًا واقعيًا بفترات مذاكرة قصيرة وراحات، " +
-                "وابدأ بالأصعب أو الأقرب موعدًا. استخدم نقاطًا قصيرة بدون جداول."
+                    "وابدأ بالأصعب أو الأقرب موعدًا. استخدم نقاطًا قصيرة بدون جداول."
     }
 }
 
-// =====================================================================
-//  الثيم
-// =====================================================================
-
+/* ── Theme ── */
 private val Indigo = Color(0xFF4F46E5)
 private val Violet = Color(0xFF8B5CF6)
 private val BrandGradient = Brush.linearGradient(listOf(Violet, Indigo))
@@ -444,23 +466,42 @@ fun SmartStudentTheme(darkTheme: Boolean = false, content: @Composable () -> Uni
     }
 }
 
-// =====================================================================
-//  النشاط الرئيسي
-// =====================================================================
-
+/* ── MainActivity (قناة إشعارات) ── */
 class MainActivity : ComponentActivity() {
     private val alarmRepo: AlarmRepository = MockAlarmRepository()
     private val aiEngine: AIEngine = GeminiAIEngine()
+    private val curriculumRepo: CurriculumRepository = MockCurriculumRepository()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                AlarmReceiver.CHANNEL_ID,
+                "منبهات ذكي‑ستودنت",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "إشعارات تنبيه للمهام الدراسية"
+                enableVibration(true)
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .build()
+                )
+            }
+            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        }
+
         val prefs = getSharedPreferences("smartstudent_prefs", Context.MODE_PRIVATE)
+
         setContent {
             var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
             SmartStudentTheme(darkTheme = dark) {
                 MainScreen(
                     alarmRepository = alarmRepo,
                     aiEngine = aiEngine,
+                    curriculumRepository = curriculumRepo,
                     darkTheme = dark,
                     onDarkThemeChange = {
                         dark = it
@@ -472,16 +513,23 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/* ── UI رئيسية (Tabs) ── */
 @Composable
 fun MainScreen(
     alarmRepository: AlarmRepository,
     aiEngine: AIEngine,
+    curriculumRepository: CurriculumRepository,
     darkTheme: Boolean,
     onDarkThemeChange: (Boolean) -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("الرئيسية", "دردشة AI", "الامتحانات", "حسابي")
-    val tabIcons = listOf(Icons.Filled.Home, Icons.Filled.Chat, Icons.Filled.Description, Icons.Filled.Person)
+    val tabs = listOf("الرئيسية", "دردشة AI", "الامتحانات", "حسابي")
+    val tabIcons = listOf(
+        Icons.Filled.Home,
+        Icons.Filled.Chat,
+        Icons.Filled.Description,
+        Icons.Filled.Person
+    )
     val cs = MaterialTheme.colorScheme
 
     Scaffold(
@@ -489,9 +537,14 @@ fun MainScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         Box(
-                            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(BrandGradient),
+                            Modifier.size(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(BrandGradient),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -500,7 +553,7 @@ fun MainScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {}) { Icon(Icons.Outlined.Notifications, contentDescription = "التنبيهات") }
+                    IconButton(onClick = { }) { Icon(Icons.Outlined.Notifications, contentDescription = "التنبيهات") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = cs.background,
@@ -531,17 +584,14 @@ fun MainScreen(
             when (targetTab) {
                 0 -> HomeTab(alarmRepository, aiEngine, Modifier.padding(padding))
                 1 -> AIChatTab(aiEngine, Modifier.padding(padding))
-                2 -> ExamTab(aiEngine, Modifier.padding(padding))
+                2 -> ExamTab(aiEngine, curriculumRepository, Modifier.padding(padding))
                 else -> ProfileTab(darkTheme, onDarkThemeChange, Modifier.padding(padding))
             }
         }
     }
 }
 
-// =====================================================================
-//  مكونات مشتركة
-// =====================================================================
-
+/* ── مكوّنات مشتركة ── */
 @Composable
 fun AppCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
@@ -565,6 +615,44 @@ fun SelectChip(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
+/* Markdown بسيط */
+private val HEADER_RE = Regex("^#{1,6}\\s+(.*)$")
+private val BULLET_RE = Regex("^[*\\-•]\\s+(.*)$")
+private val NUMBERED_RE = Regex("^(\\d+)[.)]\\s+(.*)$")
+private val RULE_RE = Regex("^([-*_]\\s*){3,}$")
+private fun AnnotatedString.Builder.appendInline(line: String) {
+    val parts = line.split("**")
+    if (parts.size % 2 == 0) {
+        append(line.replace("**", ""))
+        return
+    }
+    parts.forEachIndexed { i, seg ->
+        if (i % 2 == 1) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(seg) } else append(seg)
+    }
+}
+fun markdownToAnnotated(src: String): AnnotatedString = buildAnnotatedString {
+    var first = true
+    for (rawLine in src.lines()) {
+        val line = rawLine.trim()
+        if (line.startsWith("```") || RULE_RE.matches(line)) continue
+        if (!first) append("\n")
+        first = false
+        val h = HEADER_RE.matchEntire(line)
+        val b = BULLET_RE.matchEntire(line)
+        val n = NUMBERED_RE.matchEntire(line)
+        when {
+            h != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 17.sp)) { appendInline(h.groupValues[1]) }
+            b != null -> { append("•  "); appendInline(b.groupValues[1]) }
+            n != null -> { append("${n.groupValues[1]}.  "); appendInline(n.groupValues[2]) }
+            else -> appendInline(line)
+        }
+    }
+}
+@Composable
+fun MarkdownText(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge) {
+    val annotated = remember(text) { markdownToAnnotated(text) }
+    Text(annotated, modifier = modifier, style = style)
+}
 @Composable
 fun ResultCard(title: String, text: String, isError: Boolean, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
@@ -590,71 +678,26 @@ fun ResultCard(title: String, text: String, isError: Boolean, modifier: Modifier
     }
 }
 
-// ---------- عرض نص Markdown بشكل بسيط (عناوين، نقاط، خط عريض) ----------
-
-private val HEADER_RE = Regex("^#{1,6}\\s+(.*)$")
-private val BULLET_RE = Regex("^[*\\-•]\\s+(.*)$")
-private val NUMBERED_RE = Regex("^(\\d+)[.)]\\s+(.*)$")
-private val RULE_RE = Regex("^([-*_]\\s*){3,}$")
-
-private fun AnnotatedString.Builder.appendInline(line: String) {
-    val parts = line.split("**")
-    if (parts.size % 2 == 0) {
-        append(line.replace("**", ""))
-        return
-    }
-    parts.forEachIndexed { i, seg ->
-        if (i % 2 == 1) withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(seg) } else append(seg)
-    }
-}
-
-fun markdownToAnnotated(src: String): AnnotatedString = buildAnnotatedString {
-    var first = true
-    for (rawLine in src.lines()) {
-        val line = rawLine.trim()
-        if (line.startsWith("```") || RULE_RE.matches(line)) continue
-        if (!first) append("\n")
-        first = false
-        val h = HEADER_RE.matchEntire(line)
-        val b = BULLET_RE.matchEntire(line)
-        val n = NUMBERED_RE.matchEntire(line)
-        when {
-            h != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 17.sp)) { appendInline(h.groupValues[1]) }
-            b != null -> { append("•  "); appendInline(b.groupValues[1]) }
-            n != null -> { append("${n.groupValues[1]}.  "); appendInline(n.groupValues[2]) }
-            else -> appendInline(line)
-        }
-    }
-}
-
-@Composable
-fun MarkdownText(
-    text: String,
-    modifier: Modifier = Modifier,
-    style: TextStyle = MaterialTheme.typography.bodyLarge
-) {
-    val annotated = remember(text) { markdownToAnnotated(text) }
-    Text(annotated, modifier = modifier, style = style)
-}
-
-// =====================================================================
-//  الرئيسية
-// =====================================================================
-
-data class StudyTask(val id: Long, val title: String, val time: String, val done: Boolean = false)
+/* ── الصفحة الرئيسية ── */
+data class StudyTask(
+    val id: Long,
+    val title: String,
+    val time: String,
+    val triggerAt: Long,
+    val done: Boolean = false
+)
 
 @Composable
 fun HomeTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
-    val tasks = remember { mutableStateListOf(StudyTask(1L, "مراجعة درس الفيزياء", "اليوم - 05:00 مساءً")) }
+    val tasks = remember { mutableStateListOf<StudyTask>() }
     var showAdd by remember { mutableStateOf(false) }
+
     var scheduleText by remember { mutableStateOf("") }
     var scheduleError by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
 
-    val doneCount = tasks.count { it.done }
-    val pendingCount = tasks.size - doneCount
     val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val greeting = when {
         hour < 12 -> "صباح الخير ☀️"
@@ -665,8 +708,16 @@ fun HomeTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modi
     if (showAdd) {
         AddTaskDialog(
             onDismiss = { showAdd = false },
-            onAdd = { title, time ->
-                tasks.add(0, StudyTask(System.currentTimeMillis(), title, time))
+            onAdd = { title, dateMillis, timeTxt ->
+                val task = StudyTask(
+                    id = System.currentTimeMillis(),
+                    title = title,
+                    time = timeTxt,
+                    triggerAt = dateMillis,
+                    done = false
+                )
+                tasks.add(0, task)
+                scheduleAlarm(task)
                 showAdd = false
             }
         )
@@ -688,14 +739,14 @@ fun HomeTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modi
                 )
             }
         }
-
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("مهام متبقية", pendingCount.toString(), Icons.Filled.Timer, Color(0xFFF59E0B), Modifier.weight(1f))
-                StatCard("مهام منجزة", doneCount.toString(), Icons.Filled.CheckCircle, Color(0xFF10B981), Modifier.weight(1f))
+                val pending = tasks.count { !it.done }
+                val done = tasks.size - pending
+                StatCard("مهام متبقية", pending.toString(), Icons.Filled.Timer, Color(0xFFF59E0B), Modifier.weight(1f))
+                StatCard("مهام منجزة", done.toString(), Icons.Filled.CheckCircle, Color(0xFF10B981), Modifier.weight(1f))
             }
         }
-
         item {
             Card(
                 Modifier.fillMaxWidth(),
@@ -717,9 +768,7 @@ fun HomeTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modi
                                     scheduleText = "أضف مهامك أولًا، وبعدها اضغط على الجدولة التلقائية."
                                 } else {
                                     isLoading = true
-                                    val list = pending.joinToString("\n") { t ->
-                                        "- ${t.title}" + (if (t.time.isNotBlank()) " (${t.time})" else "")
-                                    }
+                                    val list = pending.joinToString("\n") { "- ${it.title} (${it.time})" }
                                     scope.launch {
                                         val r = safeAi { aiEngine.autoSchedule(list) }
                                         scheduleText = r.text()
@@ -745,11 +794,9 @@ fun HomeTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modi
                 }
             }
         }
-
         if (scheduleText.isNotBlank()) {
             item { ResultCard("جدولك المقترح", scheduleText, scheduleError) }
         }
-
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -765,7 +812,6 @@ fun HomeTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modi
                 }
             }
         }
-
         if (tasks.isEmpty()) {
             item {
                 Text(
@@ -776,26 +822,30 @@ fun HomeTab(alarmRepository: AlarmRepository, aiEngine: AIEngine, modifier: Modi
                 )
             }
         }
-
         items(tasks, key = { it.id }) { task ->
             TaskRow(
                 task = task,
                 onToggle = {
-                    val i = tasks.indexOfFirst { it.id == task.id }
-                    if (i >= 0) tasks[i] = tasks[i].copy(done = !tasks[i].done)
+                    val idx = tasks.indexOfFirst { it.id == task.id }
+                    if (idx >= 0) tasks[idx] = tasks[idx].copy(done = !tasks[idx].done)
                 },
                 onDelete = { tasks.removeAll { it.id == task.id } }
             )
         }
     }
 }
-
 @Composable
 fun StatCard(title: String, value: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier) {
     AppCard(modifier) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Box(
-                Modifier.size(42.dp).clip(CircleShape).background(color.copy(alpha = 0.15f)),
+                Modifier.size(42.dp)
+                    .clip(CircleShape)
+                    .background(color.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) { Icon(icon, contentDescription = null, tint = color) }
             Column {
@@ -805,12 +855,14 @@ fun StatCard(title: String, value: String, icon: ImageVector, color: Color, modi
         }
     }
 }
-
 @Composable
 fun TaskRow(task: StudyTask, onToggle: () -> Unit, onDelete: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     AppCard(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Checkbox(checked = task.done, onCheckedChange = { onToggle() })
             Column(Modifier.weight(1f)) {
                 Text(
@@ -819,9 +871,7 @@ fun TaskRow(task: StudyTask, onToggle: () -> Unit, onDelete: () -> Unit) {
                     textDecoration = if (task.done) TextDecoration.LineThrough else null,
                     color = if (task.done) cs.onSurfaceVariant else cs.onSurface
                 )
-                if (task.time.isNotBlank()) {
-                    Text(task.time, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                }
+                Text(task.time, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = cs.onSurfaceVariant)
@@ -830,30 +880,139 @@ fun TaskRow(task: StudyTask, onToggle: () -> Unit, onDelete: () -> Unit) {
     }
 }
 
+/* إضافة مهمة مع Date/Time Picker */
 @Composable
-fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, String) -> Unit) {
+fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, String) -> Unit) {
     var title by remember { mutableStateOf("") }
-    var time by remember { mutableStateOf("") }
+    var dateMillis by remember { mutableStateOf<Long?>(null) }
+    var timeText by remember { mutableStateOf("") }
+    val ctx = LocalContext.current
+    val calendar = Calendar.getInstance()
+
+    val datePicker = remember {
+        DatePickerDialog(
+            ctx,
+            { _, year, month, dayOfMonth ->
+                calendar.set(year, month, dayOfMonth)
+                dateMillis = calendar.timeInMillis
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        )
+    }
+
+    val timePicker = remember {
+        TimePickerDialog(
+            ctx,
+            { _, hourOfDay, minute ->
+                val isPm = hourOfDay >= 12
+                var hour12 = hourOfDay % 12
+                if (hour12 == 0) hour12 = 12
+                timeText = String.format("%02d:%02d %s", hour12, minute, if (isPm) "مساءً" else "صباحًا")
+                calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                calendar.set(Calendar.MINUTE, minute)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+                dateMillis = calendar.timeInMillis
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            false
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("مهمة جديدة", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("اسم المهمة") }, singleLine = true)
-                OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("الموعد (اختياري)") }, singleLine = true)
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("اسم المهمة") },
+                    singleLine = true
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(onClick = { datePicker.show() }) {
+                        Icon(Icons.Filled.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (dateMillis != null) "التاريخ: ${android.text.format.DateFormat.format("dd/MM/yyyy", dateMillis)}" else "اختر التاريخ")
+                    }
+                    OutlinedButton(onClick = { timePicker.show() }) {
+                        Icon(Icons.Filled.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (timeText.isNotBlank()) "الوقت: $timeText" else "اختر الوقت")
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onAdd(title.trim(), time.trim()) }, enabled = title.isNotBlank()) { Text("إضافة") }
+            TextButton(
+                onClick = {
+                    val ts = dateMillis ?: System.currentTimeMillis()
+                    onAdd(title.trim(), ts, timeText.ifBlank { "بدون توقيت" })
+                },
+                enabled = title.isNotBlank() && dateMillis != null
+            ) { Text("إضافة") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
     )
 }
 
-// =====================================================================
-//  الدردشة
-// =====================================================================
+/* جدولة منبه حقيقي */
+private fun scheduleAlarm(task: StudyTask) {
+    val ctx = MyApp.instance
+    val intent = Intent(ctx, AlarmReceiver::class.java).apply {
+        putExtra(AlarmReceiver.EXTRA_TITLE, task.title)
+    }
+    val pending = PendingIntent.getBroadcast(
+        ctx,
+        task.id.hashCode(),
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+    )
+    val alarmMgr = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        alarmMgr.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
+    } else {
+        alarmMgr.setExact(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
+    }
+}
 
+/* Application للحصول على Context عالمي */
+class MyApp : Application() {
+    companion object { lateinit var instance: MyApp; private set }
+    override fun onCreate() { super.onCreate(); instance = this }
+}
+
+/* BroadcastReceiver للمنبه */
+class AlarmReceiver : BroadcastReceiver() {
+    companion object {
+        const val CHANNEL_ID = "smartstudent_alarm_channel"
+        const val EXTRA_TITLE = "alarm_title"
+    }
+    override fun onReceive(context: Context, intent: Intent) {
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: "مهمة"
+        val tone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        RingtoneManager.getRingtone(context, tone).play()
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification) // ضع أيقونة في resources
+            .setContentTitle("منبه")
+            .setContentText(title)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setDefaults(Notification.DEFAULT_ALL)
+            .build()
+        NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), notification)
+    }
+}
+
+/* ── دردشة AI ── */
 @Composable
 fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
     val cs = MaterialTheme.colorScheme
@@ -862,12 +1021,13 @@ fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val currentYear = remember { TimeUtil.currentYear() }
 
     val ask: () -> Unit = {
         loading = true
         val history = messages
         scope.launch {
-            val r = safeAi { aiEngine.chat(history) }
+            val r = safeAi { aiEngine.chat(history, currentYear) }
             messages = messages + ChatMessage(r.text(), isUser = false, isError = r.isError)
             loading = false
         }
@@ -903,16 +1063,16 @@ fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
                 item { EmptyChatState(onPick = send) }
             }
             itemsIndexed(messages) { index, msg ->
-                ChatBubble(
-                    message = msg,
-                    onRetry = if (msg.isError && index == messages.lastIndex && !loading) retry else null
-                )
+                ChatBubble(message = msg,
+                    onRetry = if (msg.isError && index == messages.lastIndex && !loading) retry else null)
             }
             if (loading) item { TypingBubble() }
         }
 
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -951,7 +1111,6 @@ fun AIChatTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
         }
     }
 }
-
 @Composable
 fun EmptyChatState(onPick: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
@@ -962,11 +1121,19 @@ fun EmptyChatState(onPick: (String) -> Unit) {
         "اديني أسئلة على الاتزان الكيميائي"
     )
     Column(
-        Modifier.fillMaxWidth().padding(top = 24.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(Modifier.size(64.dp).clip(CircleShape).background(BrandGradient), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(BrandGradient),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(Icons.Filled.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
         }
         Text("اسألني أي حاجة في مذاكرتك", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -984,7 +1151,6 @@ fun EmptyChatState(onPick: (String) -> Unit) {
         }
     }
 }
-
 @Composable
 fun ChatBubble(message: ChatMessage, onRetry: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
@@ -998,7 +1164,6 @@ fun ChatBubble(message: ChatMessage, onRetry: (() -> Unit)? = null) {
         message.isError -> cs.onErrorContainer
         else -> cs.onSurface
     }
-    // في الواجهة العربية (RTL): رسالة المستخدم يمين، ورد الذكاء الاصطناعي يسار
     val shape = if (message.isUser) RoundedCornerShape(20.dp, 20.dp, 20.dp, 4.dp) else RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
     Row(
         Modifier.fillMaxWidth(),
@@ -1032,7 +1197,6 @@ fun ChatBubble(message: ChatMessage, onRetry: (() -> Unit)? = null) {
         }
     }
 }
-
 @Composable
 fun TypingBubble() {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -1044,159 +1208,3 @@ fun TypingBubble() {
             ) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Text("جاري التفكير...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-// =====================================================================
-//  الامتحانات
-// =====================================================================
-
-@Composable
-fun ExamTab(aiEngine: AIEngine, modifier: Modifier = Modifier) {
-    val cs = MaterialTheme.colorScheme
-    var subject by remember { mutableStateOf("") }
-    var years by remember { mutableStateOf<List<Int>>(emptyList()) }
-    var types by remember { mutableStateOf<List<String>>(emptyList()) }
-    var resultText by remember { mutableStateOf("") }
-    var resultError by remember { mutableStateOf(false) }
-    var generating by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    Column(
-        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Column {
-            Text("مولّد الامتحانات", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-            Text(
-                "اختار المادة وشكل الأسئلة، وهنجهّز لك امتحان بإجاباته النموذجية.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurfaceVariant
-            )
-        }
-
-        OptionCard("المادة") {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(listOf("فيزياء", "رياضيات", "كيمياء", "أحياء", "إنجليزي", "عربي")) { s ->
-                    SelectChip(s, subject == s) { subject = s }
-                }
-            }
-        }
-
-        OptionCard("السنوات (اختياري)") {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(listOf(2026, 2025, 2024, 2023, 2022)) { y ->
-                    SelectChip(y.toString(), y in years) { years = if (y in years) years - y else years + y }
-                }
-            }
-        }
-
-        OptionCard("نوع الأسئلة (اختياري)") {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(listOf("اختيار من متعدد", "صح أو خطأ", "أكمل", "مقالي")) { t ->
-                    SelectChip(t, t in types) { types = if (t in types) types - t else types + t }
-                }
-            }
-        }
-
-        Button(
-            onClick = {
-                generating = true
-                resultText = ""
-                scope.launch {
-                    val r = safeAi { aiEngine.generateExam(subject, years, types) }
-                    resultText = r.text()
-                    resultError = r.isError
-                    generating = false
-                }
-            },
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            enabled = subject.isNotBlank() && !generating,
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            if (generating) {
-                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = cs.onPrimary)
-                Spacer(Modifier.width(10.dp))
-                Text("جاري تجهيز الامتحان...", fontWeight = FontWeight.Bold)
-            } else {
-                Text("توليد الامتحان", fontWeight = FontWeight.Bold)
-            }
-        }
-
-        AnimatedVisibility(visible = resultText.isNotBlank()) {
-            ResultCard("الامتحان", resultText, resultError)
-        }
-    }
-}
-
-@Composable
-fun OptionCard(title: String, content: @Composable () -> Unit) {
-    AppCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, fontWeight = FontWeight.Bold)
-            content()
-        }
-    }
-}
-
-// =====================================================================
-//  حسابي
-// =====================================================================
-
-@Composable
-fun ProfileTab(darkTheme: Boolean, onDarkThemeChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
-    var notificationsEnabled by remember { mutableStateOf(true) }
-
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Box(
-            Modifier.fillMaxWidth().height(190.dp).background(
-                BrandGradient,
-                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
-            ),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(80.dp).clip(CircleShape).background(Color.White).padding(4.dp)) {
-                    Box(Modifier.fillMaxSize().clip(CircleShape).background(Color(0xFFE0E7FF)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Person, contentDescription = null, modifier = Modifier.size(48.dp), tint = Indigo)
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Text("عبد الرحمن", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("طالب ثانوي", color = Color.White.copy(alpha = 0.85f))
-            }
-        }
-
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProfileItem(Icons.Outlined.Settings, "الإعدادات العامة", "تعديل بيانات الحساب")
-            ProfileItem(Icons.Outlined.Notifications, "التنبيهات", "تفعيل إشعارات المهام") {
-                Switch(checked = notificationsEnabled, onCheckedChange = { notificationsEnabled = it })
-            }
-            ProfileItem(Icons.Outlined.DarkMode, "الوضع الليلي", "تغيير مظهر التطبيق") {
-                Switch(checked = darkTheme, onCheckedChange = onDarkThemeChange)
-            }
-            ProfileItem(Icons.Outlined.Info, "عن التطبيق", "الإصدار 1.0.0")
-        }
-    }
-}
-
-@Composable
-fun ProfileItem(icon: ImageVector, title: String, subtitle: String, trailing: @Composable (() -> Unit)? = null) {
-        val cs = MaterialTheme.colorScheme
-    AppCard(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(cs.secondaryContainer), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = cs.primary)
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            }
-            if (trailing != null) trailing()
-            else Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = null, tint = cs.onSurfaceVariant)
-        }
-    }
-}
