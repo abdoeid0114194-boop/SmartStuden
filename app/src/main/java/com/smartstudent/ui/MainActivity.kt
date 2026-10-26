@@ -1184,3 +1184,19 @@ fun ProfileTab(darkTheme: Boolean, onDarkThemeChange: (Boolean) -> Unit, modifie
 
 @Composable
 fun ProfileItem(icon: ImageVector, title: String, subtitle: String, trailing: @Composable (() -> Unit)? = null) {
+        val cs = MaterialTheme.colorScheme
+    AppCard(Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(cs.secondaryContainer), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = cs.primary)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            if (trailing != null) trailing()
+            else Icon(Icons.Filled.KeyboardArrowLeft, contentDescription = null, tint = cs.onSurfaceVariant)
+        }
+    }
+}
