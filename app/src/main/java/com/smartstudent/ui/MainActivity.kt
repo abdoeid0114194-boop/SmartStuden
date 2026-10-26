@@ -132,8 +132,8 @@ data class Part(val text: String)
 
 data class ChatMessage(val text: String, val isUser: Boolean, val isError: Boolean = false)
 
-fun aiOk(text: String) = AIResponse(listOf(Candidate(Content(listOf(Part(text)))))
-fun aiError(text: String) = AIResponse(listOf(Candidate(Content(listOf(Part(text))))), isError = true)
+fun aiOk(text: String) = AIResponse(candidates = listOf(Candidate(content = Content(parts = listOf(Part(text = text))))))
+fun aiError(text: String) = AIResponse(candidates = listOf(Candidate(content = Content(parts = listOf(Part(text = text))))), isError = true)
 fun AIResponse.text(): String = candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text.orEmpty()
 
 suspend fun safeAi(block: suspend () -> AIResponse): AIResponse =
@@ -607,7 +607,6 @@ fun AddTaskDialog(onDismiss: () -> Unit, onAdd: (String, Long, String) -> Unit) 
                     OutlinedButton(onClick = { datePicker.show() }) {
                         Icon(Icons.Filled.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
-                        // هنا كان الخطأ وصلحناه
                         val dateStr = dateMillis?.let { android.text.format.DateFormat.format("dd/MM/yyyy", it) } ?: "اختر التاريخ"
                         Text("التاريخ: $dateStr")
                     }
@@ -650,7 +649,7 @@ class AlarmReceiver : BroadcastReceiver() {
         val tone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
         RingtoneManager.getRingtone(context, tone).play()
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // أيقونة افتراضية لتجنب الخطأ
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("منبه")
             .setContentText(title)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
