@@ -36,3 +36,26 @@
 
     </application>
 </manifest>
+<!-- أذونات المنبهات الدقيقة والتنبيه فوق القفل -->
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+<uses-permission android:name="android.permission.VIBRATE" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<application
+    android:name=".MyApp"
+    ...>
+    
+    <!-- نشاط التنبيه الرنان عند رنين المنبه -->
+    <activity
+        android:name=".ui.AlarmAlertActivity"
+        android:exported="false"
+        android:showWhenLocked="true"
+        android:turnScreenOn="true" />
+
+    <!-- مستقبل المنبهات -->
+    <receiver android:name=".ui.AlarmReceiver" android:exported="false" />
+    
+</application>
+
