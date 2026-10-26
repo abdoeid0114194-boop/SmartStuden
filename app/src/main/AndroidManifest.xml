@@ -1,21 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- أذونات الإنترنت والمنبهات والإشعارات والمايك -->
+    <!-- 1. أذونات الإنترنت (عشان الذكاء الاصطناعي يشتغل) -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- 2. أذونات المنبهات (عشان المنبه يضبط في الوقت بالظبط على أندرويد 12 و 13 و 15) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.VIBRATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- 3. أذونات الإشعارات (عشان يظهر إشعار لما المنبه يرن) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 4. أذونات المايك والاهتزاز (عشان الدردشة الصوتية والمنبه) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- هنا بيبدأ التطبيق نفسه -->
     <application
-        android:name=".ui.MyApp"
+        android:name=".ui.MyApp" 
         android:allowBackup="true"
         android:icon="@drawable/app_icon"
         android:label="الطالب الذكي"
-        android:supportsRtl="true">
-        
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+
+        <!-- الشاشة الرئيسية اللي بتفتح أول ما تدوس على أيقونة التطبيق -->
         <activity
             android:name="com.smartstudent.ui.MainActivity"
             android:exported="true">
@@ -24,6 +33,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
+
     </application>
 </manifest>
