@@ -14,8 +14,8 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        val geminiKey = System.getenv("GEMINI_API_KEY") ?: "YOUR_API_KEY_HERE"
-        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+        val openAiKey = System.getenv("OPENAI_API_KEY") ?: "YOUR_API_KEY_HERE"
+buildConfigField("String", "OPENAI_API_KEY", "\"$openAiKey\"")
     }
 
     buildFeatures {
