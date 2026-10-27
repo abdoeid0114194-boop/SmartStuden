@@ -3,9 +3,8 @@
 package com.smartstudent.ui
 
 // =========================================================================================
-// الاستيرادات (Imports)
-// ملاحظة: استخدمنا استيرادات صريحة لكلاسات android.app حتى لا يحدث تعارض في الأسماء مع
-// Material3 (مثل DatePickerDialog و AlertDialog).
+// 1. الاستيرادات (Imports)
+// تم كتابة كل استيراد في سطر منفصل لضمان الدقة وتجنب أي تعارض.
 // =========================================================================================
 import android.Manifest
 import android.app.Activity
@@ -99,10 +98,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 // =========================================================================================
-// 1. الإعدادات العامة (App Config)
+// 2. الإعدادات العامة (App Config)
 // هنا كل الثوابت في مكان واحد: أسماء الـ SharedPreferences، قائمة الموديلات الاحتياطية،
-// وخيارات شاشة الامتحانات (الصف / النظام / الشعبة). لاحظ أن هذه خيارات واجهة فقط،
-// أما أبواب ودروس المنهج فتأتي بالكامل من Gemini ولا يوجد أي منهج ثابت في الكود.
+// وخيارات شاشة الامتحانات (الصف / النظام / الشعبة).
 // =========================================================================================
 object AppConfig {
     /** اسم ملف الإعدادات المحلي. */
@@ -131,14 +129,13 @@ object AppConfig {
 
     /**
      * الموديلات الاحتياطية بالترتيب. لو الأول فشل (404 أو أي خطأ) ننتقل للتالي تلقائياً.
-     * موديلات gemini-1.5 القديمة اتوقفت وبترجع 404، فاستبدلناها بالموديلات الحالية.
-     * تقدر تعدل هذه القائمة بسهولة لو Google أصدرت موديلاً أحدث.
+     * تم تحديث هذه القائمة بناءً على رسالة خطأ Google التي تطلب استخدام الموديلات الجديدة.
      */
     val FALLBACK_MODELS: List<String> = listOf(
-        "gemini-3.8-flash",
-        "gemini-flash-latest",
-        "gemini-2.5-flash",
-        "gemini-2.5-pro"
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-flash-preview",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro-latest"
     )
 
     /** خيارات الصف الدراسي. */
@@ -166,7 +163,7 @@ fun subjectsFor(stream: String): List<String> = when (stream) {
 }
 
 // =========================================================================================
-// 2. الكلاسات الأساسية: Application و BroadcastReceiver للمنبه
+// 3. الكلاسات الأساسية: Application و BroadcastReceiver للمنبه
 // =========================================================================================
 
 /** كلاس التطبيق الرئيسي، يحتفظ بنسخة ثابتة من الـ Application عند الحاجة. */
@@ -259,7 +256,6 @@ class AlarmReceiver : BroadcastReceiver() {
                 NotificationManager.IMPORTANCE_HIGH
             )
             channel.description = "تنبيهات مواعيد المذاكرة والمهام"
-            // الصوت بيتشغل من الـ Ringtone نفسه، فنلغي صوت القناة عشان ما يحصلش تكرار.
             channel.setSound(null, null)
             nm.createNotificationChannel(channel)
         }
@@ -284,7 +280,7 @@ class AlarmReceiver : BroadcastReceiver() {
 }
 
 // =========================================================================================
-// 3. نماذج البيانات (Data Models)
+// 4. نماذج البيانات (Data Models)
 // =========================================================================================
 
 /** درس واحد داخل باب. */
@@ -328,7 +324,7 @@ sealed class CurriculumResult {
 }
 
 // =========================================================================================
-// 4. تخزين المهام (Task Store)
+// 5. تخزين المهام (Task Store)
 // يحفظ المهام في SharedPreferences بصيغة JSON حتى لا تضيع عند إغلاق التطبيق.
 // =========================================================================================
 object TaskStore {
@@ -373,7 +369,66 @@ object TaskStore {
 }
 
 // =========================================================================================
-// 5. محرك الذكاء الاصطناعي (Gemini AI Engine)
+// 6. حاملات الحالة (State Holders)
+// تُنشأ مرة واحدة في MainScreen حتى لا تضيع المحادثة أو تقدّم الامتحان عند تغيير التبويب.
+// =========================================================================================
+
+/** حالة شاشة الدردشة. */
+class ChatState {
+    /** كل رسائل المحادثة. */
+    var messages by mutableStateOf<List<ChatMessage>>(emptyList())
+
+    /** هل ننتظر رد الذكاء الاصطناعي الآن؟ */
+    var loading by mutableStateOf(false)
+}
+
+/** حالة معالج الامتحان بكل خطواته. */
+class ExamState {
+    /** الخطوة الحالية: 0 صف، 1 نظام، 2 شعبة، 3 مادة، 4 اختيار الدروس، 5 الاختبار، 6 النتيجة. */
+    var step by mutableIntStateOf(0)
+    var grade by mutableStateOf("")
+    var system by mutableStateOf("")
+    var stream by mutableStateOf("")
+    var subject by mutableStateOf("")
+
+    /** الأبواب والدروس القادمة من الذكاء الاصطناعي. */
+    var chapters by mutableStateOf<List<Chapter>>(emptyList())
+
+    /** أرقام الدروس المحددة. */
+    var selectedIds by mutableStateOf<Set<Long>>(emptySet())
+
+    var curriculumLoading by mutableStateOf(false)
+    var examLoading by mutableStateOf(false)
+    var errorMsg by mutableStateOf("")
+
+    var questions by mutableStateOf<List<QuizQuestion>>(emptyList())
+    var qIndex by mutableIntStateOf(0)
+    var selectedAnswer by mutableStateOf<Int?>(null)
+    var score by mutableIntStateOf(0)
+
+    /** عدّاد لإبطال الردود القديمة. */
+    var requestToken = 0
+
+    /** الرجوع للبداية بعد تصفير كل شيء. */
+    fun resetAll() {
+        step = 0
+        grade = ""
+        system = ""
+        stream = ""
+        subject = ""
+        chapters = emptyList()
+        selectedIds = emptySet()
+        curriculumLoading = false
+        examLoading = false
+        errorMsg = ""
+        questions = emptyList()
+        qIndex = 0
+        selectedAnswer = null
+        score = 0
+    }
+}
+// =========================================================================================
+// 7. محرك الذكاء الاصطناعي (Gemini AI Engine)
 // - يستخدم OkHttp للاتصال بـ Gemini.
 // - نظام التبديل التلقائي (Fallback): لو موديل فشل ينتقل للتالي في حلقة حتى ينجح أحدهم.
 // - مفتاح الـ API من BuildConfig.GEMINI_API_KEY.
@@ -479,7 +534,6 @@ class GeminiAIEngine {
      * الدردشة: نرسل آخر رسائل المحادثة (بدون رسائل الخطأ)، ولو فيه صورة نرفقها بآخر رسالة للمستخدم.
      */
     suspend fun chat(history: List<ChatMessage>, imageBase64: String? = null): AIResponse {
-        // Gemini لازم أول رسالة في المحادثة تكون من المستخدم، لذلك نحذف أي رسائل "model" في البداية.
         val usable = history
             .filter { !it.isError && it.text.isNotBlank() }
             .takeLast(10)
@@ -554,7 +608,7 @@ class GeminiAIEngine {
 }
 
 // =========================================================================================
-// 6. مستودع المنهج (Curriculum Repository)
+// 8. مستودع المنهج (Curriculum Repository)
 // بدل البيانات الثابتة (Mock Data) صار المنهج يُجلب من Gemini ويُحلَّل من JSON،
 // مع تخزين مؤقت في الذاكرة حتى لا نكرر الطلب لنفس المادة.
 // =========================================================================================
@@ -646,9 +700,8 @@ object CurriculumParser {
 }
 
 // =========================================================================================
-// 7. محلل الامتحان (Quiz Parser)
+// 9. محلل الامتحان (Quiz Parser)
 // يحوّل نص Gemini ذي التنسيق (Q / O1-O4 / C / E) إلى قائمة QuizQuestion.
-// مرن مع علامات Markdown مثل ** أو أرقام الأسئلة (Q1:) أو الشرطات في بداية السطر.
 // =========================================================================================
 fun parseQuiz(text: String): List<QuizQuestion> {
     val questions = mutableListOf<QuizQuestion>()
@@ -663,7 +716,6 @@ fun parseQuiz(text: String): List<QuizQuestion> {
     var explanation = ""
     var lastWasExplanation = false
 
-    /** يضيف السؤال الحالي للقائمة لو كانت بياناته مكتملة ثم يصفّر الحالة. */
     fun flush() {
         if (qText.isNotBlank() && correct in 0..3 && options.all { !it.isNullOrBlank() }) {
             questions.add(QuizQuestion(qText, options.map { it.orEmpty() }, correct, explanation.trim()))
@@ -685,22 +737,10 @@ fun parseQuiz(text: String): List<QuizQuestion> {
         val c = cRegex.find(line)
         val e = eRegex.find(line)
         when {
-            q != null -> {
-                flush()
-                qText = q.groupValues[1].trim()
-            }
-            o != null -> {
-                options[o.groupValues[1].toInt() - 1] = o.groupValues[2].trim()
-                lastWasExplanation = false
-            }
-            c != null -> {
-                correct = c.groupValues[1].toInt() - 1
-                lastWasExplanation = false
-            }
-            e != null -> {
-                explanation = e.groupValues[1].trim()
-                lastWasExplanation = true
-            }
+            q != null -> { flush(); qText = q.groupValues[1].trim() }
+            o != null -> { options[o.groupValues[1].toInt() - 1] = o.groupValues[2].trim(); lastWasExplanation = false }
+            c != null -> { correct = c.groupValues[1].toInt() - 1; lastWasExplanation = false }
+            e != null -> { explanation = e.groupValues[1].trim(); lastWasExplanation = true }
             lastWasExplanation -> explanation += " " + line
             else -> Unit
         }
@@ -709,14 +749,11 @@ fun parseQuiz(text: String): List<QuizQuestion> {
     return questions
 }
 
-
 // =========================================================================================
-// 8. الثيم (Material Design 3 + RTL + Gradient + Dark Mode)
+// 10. الثيم (Material Design 3 + RTL + Gradient + Dark Mode)
 // =========================================================================================
 private val Indigo = Color(0xFF4F46E5)
 private val Violet = Color(0xFF8B5CF6)
-
-/** التدرج الرئيسي (بنفسجي → إندجو) المستخدم في الهيدر والبطاقات المميزة. */
 private val BrandGradient = Brush.linearGradient(listOf(Violet, Indigo))
 
 private val LightColors = lightColorScheme(
@@ -733,9 +770,6 @@ private val DarkColors = darkColorScheme(
     surface = Color(0xFF181B24)
 )
 
-/**
- * ثيم التطبيق: يفرض اتجاه RTL للعربية ويختار الألوان الفاتحة أو الداكنة.
- */
 @Composable
 fun SmartStudentTheme(darkTheme: Boolean = false, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -747,7 +781,93 @@ fun SmartStudentTheme(darkTheme: Boolean = false, content: @Composable () -> Uni
 }
 
 // =========================================================================================
-// 9. مكونات واجهة مشتركة (Shared UI Components)
+// 11. دوال مساعدة (Helpers)
+// =========================================================================================
+
+/** يحمّل صورة من الـ Uri ويصغّرها (أقصى ضلع 1024 بكسل) لتفادي OutOfMemory. */
+fun loadScaledBitmap(ctx: Context, uri: Uri, maxSide: Int = 1024): Bitmap? {
+    return try {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+
+        var sample = 1
+        while (bounds.outWidth / sample > maxSide * 2 || bounds.outHeight / sample > maxSide * 2) {
+            sample *= 2
+        }
+        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sample }
+        val decoded = ctx.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, decodeOptions)
+        } ?: return null
+
+        val largest = maxOf(decoded.width, decoded.height)
+        if (largest > maxSide) {
+            val scale = maxSide.toFloat() / largest
+            Bitmap.createScaledBitmap(
+                decoded,
+                (decoded.width * scale).toInt(),
+                (decoded.height * scale).toInt(),
+                true
+            )
+        } else {
+            decoded
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/** يحوّل الصورة إلى Base64 بصيغة JPEG لإرسالها إلى الموديل. */
+fun bitmapToBase64(bitmap: Bitmap): String {
+    val out = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+    return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+}
+
+/** يبني الـ PendingIntent الخاص بمهمة معينة (نفس الدالة تُستخدم للضبط والإلغاء). */
+fun buildAlarmPendingIntent(ctx: Context, task: StudyTask): PendingIntent {
+    val intent = Intent(ctx, AlarmReceiver::class.java).putExtra(AppConfig.EXTRA_TASK_TITLE, task.title)
+    return PendingIntent.getBroadcast(
+        ctx, task.id.hashCode(), intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+}
+
+/** هل يسمح النظام بالمنبهات الدقيقة؟ (دائماً true قبل أندرويد 12). */
+fun canUseExactAlarms(ctx: Context): Boolean {
+    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) am.canScheduleExactAlarms() else true
+}
+
+/** ضبط المنبه. لو الصلاحية ممنوحة نستخدم setExactAndAllowWhileIdle، وإلا نستخدم setAndAllowWhileIdle. */
+fun scheduleAlarm(ctx: Context, task: StudyTask): Boolean {
+    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val pending = buildAlarmPendingIntent(ctx, task)
+    if (canUseExactAlarms(ctx)) {
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
+            return true
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+        }
+    }
+    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
+    return false
+}
+
+/** إلغاء منبه مهمة (عند حذفها أو إنهائها). */
+fun cancelAlarm(ctx: Context, task: StudyTask) {
+    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    am.cancel(buildAlarmPendingIntent(ctx, task))
+}
+
+/** تنسيق موعد المهمة للعرض، مثال: 2026/10/27 - 08:30 م. */
+fun formatTaskTime(millis: Long): String {
+    val formatter = SimpleDateFormat("yyyy/MM/dd - hh:mm a", Locale("ar", "EG"))
+    return formatter.format(Date(millis))
+}
+
+// =========================================================================================
+// 12. المكونات المشتركة (Shared UI Components)
 // =========================================================================================
 
 /** بطاقة بخلفية متدرجة تعرض عنواناً ونصاً فرعياً. */
@@ -795,7 +915,7 @@ fun SectionTitle(text: String) {
 }
 
 // =========================================================================================
-// 10. النشاط الرئيسي (MainActivity)
+// 13. النشاط الرئيسي (MainActivity) - جزء من الإعداد
 // =========================================================================================
 class MainActivity : ComponentActivity() {
 
@@ -807,7 +927,7 @@ class MainActivity : ComponentActivity() {
 
     /** طلب صلاحية الإشعارات (أندرويد 13+). */
     private val notificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* لا شيء نفعله هنا */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     /** نقطة بداية التطبيق: يطلب صلاحية الإشعارات ثم يعرض الواجهة بالثيم المحفوظ. */
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -837,9 +957,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+// =========================================================================================
+// 14. واجهة التنقل الرئيسية (Main Screen & Navigation)
+// =========================================================================================
 
 /**
  * الشاشة الرئيسية: شريط علوي متدرج + شريط تنقل سفلي بأربعة أقسام.
+ * يتم الاحتفاظ بحالة الدردشة والامتحانات هنا حتى لا تضيع عند التنقل بين التبويبات.
  */
 @Composable
 fun MainScreen(
@@ -849,176 +973,202 @@ fun MainScreen(
     onDarkThemeChange: (Boolean) -> Unit,
     prefs: SharedPreferences
 ) {
+    // متغير لتحديد التبويب النشط حالياً (0: الرئيسية، 1: الدردشة، 2: الامتحانات، 3: حسابي)
     var selectedTab by remember { mutableIntStateOf(0) }
-    // حالة الدردشة والامتحان محفوظة هنا حتى لا تضيع عند التنقل بين التبويبات،
-    // والـ scope هنا يضمن أن الطلبات الجارية لا تُلغى عند تغيير التبويب.
+
+    // سكوب للكوروتينات مرتبط بدورة حياة هذه الشاشة
     val appScope = rememberCoroutineScope()
+
+    // حاملات الحالة المحفوظة (State Holders) للدردشة والامتحانات
     val chatState = remember { ChatState() }
     val examState = remember { ExamState() }
-    val tabs = listOf("الرئيسية", "دردشة AI", "الامتحانات", "حسابي")
-    val icons = listOf(Icons.Filled.Home, Icons.Filled.Chat, Icons.Filled.Description, Icons.Filled.Person)
 
+    // قوائم التبويبات والأيقونات الخاصة بها
+    val tabs = listOf("الرئيسية", "دردشة AI", "الامتحانات", "حسابي")
+    val icons = listOf(
+        Icons.Filled.Home,
+        Icons.Filled.Chat,
+        Icons.Filled.Description,
+        Icons.Filled.Person
+    )
+
+    // استخدام Scaffold لإنشاء الهيكل الأساسي (شريط علوي + شريط سفلي + محتوى)
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("الطالب الذكي", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        "الطالب الذكي",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
+                    containerColor = Color.Transparent, // شفاف ليأخذ لون التدرج من الموديفاير
                     titleContentColor = Color.White
                 ),
                 modifier = Modifier.background(BrandGradient)
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                tabs.forEachIndexed { i, label ->
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                tabs.forEachIndexed { index, label ->
                     NavigationBarItem(
-                        selected = selectedTab == i,
-                        onClick = { selectedTab = i },
-                        icon = { Icon(icons[i], contentDescription = label) },
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        icon = {
+                            Icon(
+                                icons[index],
+                                contentDescription = label
+                            )
+                        },
                         label = { Text(label) }
                     )
                 }
             }
         }
-    ) { padding ->
+    ) { paddingValues ->
+        // توزيع الشاشات بناءً على التبويب المختار
         when (selectedTab) {
-            0 -> HomeTab(prefs, Modifier.padding(padding))
-            1 -> AIChatTab(aiEngine, chatState, appScope, Modifier.padding(padding))
-            2 -> ExamWizardTab(aiEngine, repo, examState, appScope, Modifier.padding(padding))
-            else -> ProfileTab(darkTheme, onDarkThemeChange, prefs, Modifier.padding(padding))
+            0 -> HomeTab(
+                prefs = prefs,
+                modifier = Modifier.padding(paddingValues)
+            )
+            1 -> AIChatTab(
+                aiEngine = aiEngine,
+                state = chatState,
+                scope = appScope,
+                modifier = Modifier.padding(paddingValues)
+            )
+            2 -> ExamWizardTab(
+                aiEngine = aiEngine,
+                repo = repo,
+                state = examState,
+                scope = appScope,
+                modifier = Modifier.padding(paddingValues)
+            )
+            else -> ProfileTab(
+                dark = darkTheme,
+                onDark = onDarkThemeChange,
+                prefs = prefs,
+                modifier = Modifier.padding(paddingValues)
+            )
         }
     }
 }
 
 // =========================================================================================
-// 11. دوال المنبه (Alarm Helpers)
+// 15. الشاشة الرئيسية: المهام والمنبهات (Home Tab) - تم إصلاح الزرار العائم
 // =========================================================================================
-
-/** يبني الـ PendingIntent الخاص بمهمة معينة (نفس الدالة تُستخدم للضبط والإلغاء). */
-fun buildAlarmPendingIntent(ctx: Context, task: StudyTask): PendingIntent {
-    val intent = Intent(ctx, AlarmReceiver::class.java).putExtra(AppConfig.EXTRA_TASK_TITLE, task.title)
-    return PendingIntent.getBroadcast(
-        ctx,
-        task.id.hashCode(),
-        intent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-}
-
-/** هل يسمح النظام بالمنبهات الدقيقة؟ (دائماً true قبل أندرويد 12). */
-fun canUseExactAlarms(ctx: Context): Boolean {
-    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) am.canScheduleExactAlarms() else true
-}
 
 /**
- * ضبط المنبه. لو الصلاحية ممنوحة نستخدم setExactAndAllowWhileIdle، وإلا نستخدم
- * setAndAllowWhileIdle كبديل لتجنب انهيار التطبيق على أندرويد 12+.
- * ترجع true لو المنبه دقيق، و false لو تقريبي.
+ * شاشة المهام الرئيسية.
+ * تم استخدام Box بدلاً من Scaffold داخلي لتجنب تداخل الأبعاد، مما يضمن ظهور الزرار العائم (FAB) بشكل صحيح.
  */
-fun scheduleAlarm(ctx: Context, task: StudyTask): Boolean {
-    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    val pending = buildAlarmPendingIntent(ctx, task)
-    if (canUseExactAlarms(ctx)) {
-        try {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
-            return true
-        } catch (e: SecurityException) {
-            // لو النظام سحب الصلاحية فجأة نرجع للمنبه التقريبي.
-            e.printStackTrace()
+@Composable
+fun HomeTab(
+    prefs: SharedPreferences,
+    modifier: Modifier = Modifier
+) {
+    val ctx = LocalContext.current
+
+    // قائمة المهام القابلة للتحديث (MutableStateList) لتعكس أي إضافة أو حذف فوراً
+    val tasks = remember {
+        mutableStateListOf<StudyTask>().apply {
+            addAll(TaskStore.load(prefs))
         }
     }
-    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
-    return false
-}
 
-/** إلغاء منبه مهمة (عند حذفها أو إنهائها). */
-fun cancelAlarm(ctx: Context, task: StudyTask) {
-    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    am.cancel(buildAlarmPendingIntent(ctx, task))
-}
-
-/** تنسيق موعد المهمة للعرض، مثال: 2026/10/27 - 08:30 م. */
-fun formatTaskTime(millis: Long): String {
-    val formatter = SimpleDateFormat("yyyy/MM/dd - hh:mm a", Locale("ar", "EG"))
-    return formatter.format(Date(millis))
-}
-
-// =========================================================================================
-// 12. الشاشة الرئيسية: المهام والمنبهات (Home Tab)
-// =========================================================================================
-@Composable
-fun HomeTab(prefs: SharedPreferences, modifier: Modifier = Modifier) {
-    val ctx = LocalContext.current
-    val tasks = remember { mutableStateListOf<StudyTask>().apply { addAll(TaskStore.load(prefs)) } }
+    // حالة إظهار نافذة إضافة مهمة جديدة
     var showDialog by remember { mutableStateOf(false) }
+
+    // حقول الإدخال في النافذة
     var title by remember { mutableStateOf("") }
     var pickedDate by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     var pickedTime by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
-    /** حفظ القائمة الحالية في الذاكرة الدائمة. */
-    fun persist() = TaskStore.save(prefs, tasks.toList())
-
-    // عند فتح التطبيق نعيد جدولة المنبهات القادمة (مفيد بعد إعادة تشغيل الهاتف).
-    LaunchedEffect(Unit) {
-        val now = System.currentTimeMillis()
-        tasks.filter { !it.done && it.triggerAt > now }.forEach { scheduleAlarm(ctx, it) }
+    /** دالة داخلية لحفظ المهام في الذاكرة الدائمة (SharedPreferences) */
+    fun persist() {
+        TaskStore.save(prefs, tasks.toList())
     }
 
-    /** إعادة ضبط حقول نافذة إضافة المهمة. */
+    // عند فتح التطبيق، نقوم بإعادة جدولة المنبهات القادمة التي لم تنتهِ بعد
+    LaunchedEffect(Unit) {
+        val now = System.currentTimeMillis()
+        tasks.filter { !it.done && it.triggerAt > now }.forEach { task ->
+            scheduleAlarm(ctx, task)
+        }
+    }
+
+    /** تصفير الحقول عند إغلاق النافذة */
     fun resetDialogFields() {
         title = ""
         pickedDate = null
         pickedTime = null
     }
 
-    /** فتح نافذة اختيار التاريخ (لا يمكن اختيار يوم قديم). */
+    /** فتح نافذة اختيار التاريخ */
     fun openDatePicker() {
         val now = Calendar.getInstance()
         val dialog = DatePickerDialog(
             ctx,
-            { _, y, m, d -> pickedDate = Triple(y, m, d) },
+            { _, year, month, day ->
+                pickedDate = Triple(year, month, day)
+            },
             now.get(Calendar.YEAR),
             now.get(Calendar.MONTH),
             now.get(Calendar.DAY_OF_MONTH)
         )
+        // منع اختيار تاريخ في الماضي
         dialog.datePicker.minDate = System.currentTimeMillis() - 1000
         dialog.show()
     }
 
-    /** فتح نافذة اختيار الوقت بنظام 12 ساعة (ص/م). */
+    /** فتح نافذة اختيار الوقت */
     fun openTimePicker() {
         val now = Calendar.getInstance()
         TimePickerDialog(
             ctx,
-            { _, h, min -> pickedTime = Pair(h, min) },
+            { _, hour, minute ->
+                pickedTime = Pair(hour, minute)
+            },
             now.get(Calendar.HOUR_OF_DAY),
             now.get(Calendar.MINUTE),
-            false
+            false // تنسيق 12 ساعة
         ).show()
     }
 
-    /** إنشاء المهمة بعد التحقق من البيانات وضبط المنبه. */
+    /** إضافة المهمة بعد التحقق من صحة البيانات وضبط المنبه */
     fun addTask() {
         val date = pickedDate
         val time = pickedTime
+
         if (title.isBlank() || date == null || time == null) {
             Toast.makeText(ctx, "أكمل البيانات أولاً (الاسم والتاريخ والوقت)", Toast.LENGTH_SHORT).show()
             return
         }
+
         val cal = Calendar.getInstance()
         cal.set(date.first, date.second, date.third, time.first, time.second, 0)
         cal.set(Calendar.MILLISECOND, 0)
+
         if (cal.timeInMillis <= System.currentTimeMillis()) {
             Toast.makeText(ctx, "الموعد لازم يكون في المستقبل", Toast.LENGTH_SHORT).show()
             return
         }
-        val task = StudyTask(id = System.currentTimeMillis(), title = title.trim(), triggerAt = cal.timeInMillis)
+
+        val task = StudyTask(
+            id = System.currentTimeMillis(),
+            title = title.trim(),
+            triggerAt = cal.timeInMillis
+        )
+
         tasks.add(task)
-        tasks.sortBy { it.triggerAt }
+        tasks.sortBy { it.triggerAt } // ترتيب المهام حسب الأقرب
         persist()
+
         val exact = scheduleAlarm(ctx, task)
         if (!exact) {
             Toast.makeText(
@@ -1027,10 +1177,12 @@ fun HomeTab(prefs: SharedPreferences, modifier: Modifier = Modifier) {
                 Toast.LENGTH_LONG
             ).show()
         }
+
         showDialog = false
         resetDialogFields()
     }
 
+    // نافذة إضافة مهمة جديدة
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -1069,7 +1221,9 @@ fun HomeTab(prefs: SharedPreferences, modifier: Modifier = Modifier) {
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { addTask() }) { Text("إضافة") } },
+            confirmButton = {
+                TextButton(onClick = { addTask() }) { Text("إضافة") }
+            },
             dismissButton = {
                 TextButton(onClick = {
                     showDialog = false
@@ -1079,16 +1233,15 @@ fun HomeTab(prefs: SharedPreferences, modifier: Modifier = Modifier) {
         )
     }
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showDialog = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "مهمة جديدة")
-            }
-        },
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
-    ) { innerPadding ->
-        Column(modifier.fillMaxSize().padding(innerPadding).padding(16.dp)) {
+    // ---------------------------------------------------------------------------------
+    // إصلاح مشكلة اختفاء الزرار العائم: استخدام Box كحاوية رئيسية
+    // ---------------------------------------------------------------------------------
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
             Text(
                 "أهلاً بك 👋",
                 style = MaterialTheme.typography.headlineSmall,
@@ -1096,6 +1249,7 @@ fun HomeTab(prefs: SharedPreferences, modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(16.dp))
+
             val doneCount = tasks.count { it.done }
             GradientCard(
                 title = "مساعدك الذكي",
@@ -1110,18 +1264,26 @@ fun HomeTab(prefs: SharedPreferences, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(8.dp))
 
             if (tasks.isEmpty()) {
-                Text("لا توجد مهام بعد.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                Text(
+                    "لا توجد مهام بعد.",
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                )
             }
 
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // مسافة سفلية في نهاية القائمة حتى لا يغطي الزرار العائم على آخر مهمة
+            LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
                 items(tasks, key = { it.id }) { task ->
                     TaskCard(
                         task = task,
                         onToggle = { checked ->
-                            val idx = tasks.indexOfFirst { it.id == task.id }
-                            if (idx >= 0) {
+                            val index = tasks.indexOfFirst { it.id == task.id }
+                            if (index >= 0) {
                                 val updated = task.copy(done = checked)
-                                tasks[idx] = updated
+                                tasks[index] = updated
                                 persist()
                                 if (checked) {
                                     cancelAlarm(ctx, updated)
@@ -1139,18 +1301,40 @@ fun HomeTab(prefs: SharedPreferences, modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        // الزرار العائم (FAB) في الركن السفلي الأيمن
+        FloatingActionButton(
+            onClick = { showDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "مهمة جديدة")
+        }
     }
 }
 
-/** بطاقة مهمة واحدة: خانة إنجاز + العنوان + الموعد + زر حذف. */
+/**
+ * بطاقة مهمة واحدة: خانة إنجاز + العنوان + الموعد + زر حذف.
+ */
 @Composable
-fun TaskCard(task: StudyTask, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+fun TaskCard(
+    task: StudyTask,
+    onToggle: (Boolean) -> Unit,
+    onDelete: () -> Unit
+) {
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = task.done, onCheckedChange = onToggle)
+        Row(
+            Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = task.done,
+                onCheckedChange = onToggle
+            )
             Column(Modifier.weight(1f)) {
                 Text(
                     task.title,
@@ -1165,131 +1349,28 @@ fun TaskCard(task: StudyTask, onToggle: (Boolean) -> Unit, onDelete: () -> Unit)
                 )
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = Color(0xFFE53935))
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = "حذف",
+                    tint = Color(0xFFE53935)
+                )
             }
         }
     }
 }
 
-
 // =========================================================================================
-// 13. حاملات الحالة (State Holders)
-// تُنشأ مرة واحدة في MainScreen حتى لا تضيع المحادثة أو تقدّم الامتحان عند تغيير التبويب.
-// =========================================================================================
-
-/** حالة شاشة الدردشة. */
-class ChatState {
-    /** كل رسائل المحادثة. */
-    var messages by mutableStateOf<List<ChatMessage>>(emptyList())
-
-    /** هل ننتظر رد الذكاء الاصطناعي الآن؟ */
-    var loading by mutableStateOf(false)
-}
-
-/** حالة معالج الامتحان بكل خطواته. */
-class ExamState {
-    /** الخطوة الحالية: 0 صف، 1 نظام، 2 شعبة، 3 مادة، 4 اختيار الدروس، 5 الاختبار، 6 النتيجة. */
-    var step by mutableIntStateOf(0)
-    var grade by mutableStateOf("")
-    var system by mutableStateOf("")
-    var stream by mutableStateOf("")
-    var subject by mutableStateOf("")
-
-    /** الأبواب والدروس القادمة من الذكاء الاصطناعي. */
-    var chapters by mutableStateOf<List<Chapter>>(emptyList())
-
-    /** أرقام الدروس المحددة. */
-    var selectedIds by mutableStateOf<Set<Long>>(emptySet())
-
-    var curriculumLoading by mutableStateOf(false)
-    var examLoading by mutableStateOf(false)
-    var errorMsg by mutableStateOf("")
-
-    var questions by mutableStateOf<List<QuizQuestion>>(emptyList())
-    var qIndex by mutableIntStateOf(0)
-    var selectedAnswer by mutableStateOf<Int?>(null)
-    var score by mutableIntStateOf(0)
-
-    /** عدّاد لإبطال الردود القديمة: كل طلب جديد أو رجوع يزيده، فيتجاهل أي رد متأخر لطلب سابق. */
-    var requestToken = 0
-
-    /** الرجوع للبداية بعد تصفير كل شيء. */
-    fun resetAll() {
-        step = 0
-        grade = ""
-        system = ""
-        stream = ""
-        subject = ""
-        chapters = emptyList()
-        selectedIds = emptySet()
-        curriculumLoading = false
-        examLoading = false
-        errorMsg = ""
-        questions = emptyList()
-        qIndex = 0
-        selectedAnswer = null
-        score = 0
-    }
-}
-
-// =========================================================================================
-// 14. أدوات الصور (Image Helpers)
+// 16. شاشة الدردشة (AI Chat Tab)
 // =========================================================================================
 
 /**
- * يحمّل صورة من الـ Uri ويصغّرها (أقصى ضلع 1024 بكسل) لتفادي OutOfMemory
- * وتقليل حجم الإرسال. ترجع null لو حصل خطأ.
+ * فقاعة رسالة واحدة (لون مختلف للمستخدم والذكاء الاصطناعي والخطأ).
  */
-fun loadScaledBitmap(ctx: Context, uri: Uri, maxSide: Int = 1024): Bitmap? {
-    return try {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-
-        var sample = 1
-        while (bounds.outWidth / sample > maxSide * 2 || bounds.outHeight / sample > maxSide * 2) {
-            sample *= 2
-        }
-        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sample }
-        val decoded = ctx.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, decodeOptions)
-        } ?: return null
-
-        val largest = maxOf(decoded.width, decoded.height)
-        if (largest > maxSide) {
-            val scale = maxSide.toFloat() / largest
-            Bitmap.createScaledBitmap(
-                decoded,
-                (decoded.width * scale).toInt(),
-                (decoded.height * scale).toInt(),
-                true
-            )
-        } else {
-            decoded
-        }
-    } catch (e: Exception) {
-        null
-    }
-}
-
-/** يحوّل الصورة إلى Base64 بصيغة JPEG لإرسالها إلى الموديل. */
-fun bitmapToBase64(bitmap: Bitmap): String {
-    val out = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
-    return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
-}
-
-// =========================================================================================
-// 15. شاشة الدردشة (AI Chat Tab)
-// - فقاعات رسائل حديثة.
-// - إرسال نص، أو صورة من المعرض (Base64).
-// - إدخال صوتي بـ SpeechRecognizer مع طلب صلاحية RECORD_AUDIO.
-// - تمرير تلقائي لأسفل عند وصول رسالة جديدة.
-// =========================================================================================
-
-/** فقاعة رسالة واحدة (لون مختلف للمستخدم والذكاء الاصطناعي والخطأ). */
 @Composable
 fun ChatBubble(msg: ChatMessage) {
     val scheme = MaterialTheme.colorScheme
+
+    // تحديد الخلفية الأمامية بناءً على مرسل الرسالة وحالتها
     val background = when {
         msg.isError -> scheme.errorContainer
         msg.isUser -> scheme.primary
@@ -1300,6 +1381,8 @@ fun ChatBubble(msg: ChatMessage) {
         msg.isUser -> scheme.onPrimary
         else -> scheme.onSurface
     }
+
+    // عرض الرسالة: المستخدم على اليسار (Start)، والبوت على اليمين (End) بسبب RTL
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (msg.isUser) Arrangement.Start else Arrangement.End
@@ -1310,11 +1393,14 @@ fun ChatBubble(msg: ChatMessage) {
             colors = CardDefaults.cardColors(containerColor = background)
         ) {
             Column(Modifier.padding(12.dp)) {
+                // إذا كانت الرسالة تحتوي على صورة مرفقة، يتم عرضها
                 msg.imageBitmap?.let { bmp ->
                     FoundationImage(
                         bitmap = bmp.asImageBitmap(),
                         contentDescription = "الصورة المرفقة",
-                        modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)),
+                        modifier = Modifier
+                            .size(120.dp)
+                            .clip(RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.Crop
                     )
                     Spacer(Modifier.height(8.dp))
@@ -1325,7 +1411,9 @@ fun ChatBubble(msg: ChatMessage) {
     }
 }
 
-/** تحويل رمز خطأ SpeechRecognizer إلى رسالة مفهومة للمستخدم. */
+/**
+ * تحويل رمز خطأ SpeechRecognizer إلى رسالة مفهومة للمستخدم.
+ */
 fun speechErrorMessage(code: Int): String = when (code) {
     SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "الإدخال الصوتي يحتاج اتصال إنترنت"
     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "صلاحية الميكروفون غير ممنوحة"
@@ -1346,6 +1434,8 @@ fun AIChatTab(
 ) {
     val ctx = LocalContext.current
     val listState = rememberLazyListState()
+
+    // حالة الإدخال المحلية
     var input by remember { mutableStateOf("") }
     var imgB64 by remember { mutableStateOf<String?>(null) }
     var imgBmp by remember { mutableStateOf<Bitmap?>(null) }
@@ -1354,6 +1444,7 @@ fun AIChatTab(
     // ---------------- الإدخال الصوتي ----------------
     val speechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(ctx) }
     val recognizer = remember { if (speechAvailable) SpeechRecognizer.createSpeechRecognizer(ctx) else null }
+
     val speechIntent = remember {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -1362,21 +1453,18 @@ fun AIChatTab(
         }
     }
 
-    // ربط المستمع بالـ recognizer، وتنظيفه عند مغادرة الشاشة.
+    // ربط المستمع بالـ recognizer، وتنظيفه عند مغادرة الشاشة
     DisposableEffect(recognizer) {
         recognizer?.setRecognitionListener(object : RecognitionListener {
-            // دوال لا نحتاجها لكنها إجبارية في الواجهة:
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rmsdB: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
 
-            // انتهى المستخدم من الكلام.
             override fun onEndOfSpeech() {
                 listening = false
             }
 
-            // حصل خطأ في التعرف على الصوت: نوقف حالة الاستماع ونعرض رسالة مناسبة.
             override fun onError(error: Int) {
                 listening = false
                 if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
@@ -1384,20 +1472,21 @@ fun AIChatTab(
                 }
             }
 
-            // النتيجة النهائية: نضعها في خانة الإدخال.
             override fun onResults(results: Bundle?) {
                 listening = false
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!text.isNullOrBlank()) input = text
+                if (!text.isNullOrBlank()) {
+                    input = text
+                }
             }
 
-            // نتائج جزئية أثناء الكلام لتظهر الكلمات فوراً.
             override fun onPartialResults(partialResults: Bundle?) {
                 val text = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (!text.isNullOrBlank()) input = text
+                if (!text.isNullOrBlank()) {
+                    input = text
+                }
             }
 
-            // أحداث إضافية غير مستخدمة.
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
         onDispose {
@@ -1406,15 +1495,17 @@ fun AIChatTab(
         }
     }
 
-    // بديل لو الجهاز ما فيهوش خدمة SpeechRecognizer: نفتح شاشة التعرف الجاهزة من النظام.
+    // بديل لو الجهاز ما فيهوش خدمة SpeechRecognizer
     val speechFallbackLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
             val text = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-            if (!text.isNullOrBlank()) input = text
+            if (!text.isNullOrBlank()) {
+                input = text
+            }
         }
     }
 
-    // طلب صلاحية الميكروفون ثم بدء الاستماع لو تم السماح.
+    // طلب صلاحية الميكروفون
     val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             listening = true
@@ -1424,7 +1515,7 @@ fun AIChatTab(
         }
     }
 
-    /** زر الميكروفون: يبدأ الاستماع أو يوقفه. */
+    /** زر الميكروفون: يبدأ الاستماع أو يوقفه */
     fun toggleMic() {
         if (recognizer == null) {
             try {
@@ -1438,13 +1529,14 @@ fun AIChatTab(
             }
             return
         }
+
         if (listening) {
             recognizer.stopListening()
             listening = false
             return
         }
-        val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) ==
-            PackageManager.PERMISSION_GRANTED
+
+        val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (granted) {
             listening = true
             recognizer.startListening(speechIntent)
@@ -1469,21 +1561,24 @@ fun AIChatTab(
         }
     }
 
-    /** إرسال الرسالة (نص و/أو صورة) واستقبال رد الذكاء الاصطناعي. */
+    /** إرسال الرسالة (نص و/أو صورة) واستقبال رد الذكاء الاصطناعي */
     fun sendMessage() {
         if ((input.isBlank() && imgB64 == null) || state.loading) return
         if (listening) {
             recognizer?.stopListening()
             listening = false
         }
+
         val question = if (input.isBlank()) "حلل الصورة وساعدني في حلها" else input.trim()
         val updated = state.messages + ChatMessage(text = question, isUser = true, imageBitmap = imgBmp)
         state.messages = updated
+
         val imageToSend = imgB64
         input = ""
         imgBmp = null
         imgB64 = null
         state.loading = true
+
         scope.launch {
             val res = aiEngine.chat(updated, imageToSend)
             state.messages = state.messages + ChatMessage(text = res.text, isUser = false, isError = res.isError)
@@ -1491,10 +1586,12 @@ fun AIChatTab(
         }
     }
 
-    // تمرير تلقائي لآخر رسالة (أو لمؤشر التحميل) عند أي تغيير.
+    // تمرير تلقائي لآخر رسالة عند أي تغيير
     LaunchedEffect(state.messages.size, state.loading) {
         val count = state.messages.size + if (state.loading) 1 else 0
-        if (count > 0) listState.animateScrollToItem(count - 1)
+        if (count > 0) {
+            listState.animateScrollToItem(count - 1)
+        }
     }
 
     // ---------------- واجهة الشاشة ----------------
@@ -1512,7 +1609,11 @@ fun AIChatTab(
                     )
                 }
             }
-            items(state.messages, key = { it.id }) { msg -> ChatBubble(msg) }
+
+            items(state.messages, key = { it.id }) { msg ->
+                ChatBubble(msg)
+            }
+
             if (state.loading) {
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1524,7 +1625,7 @@ fun AIChatTab(
             }
         }
 
-        // معاينة الصورة المختارة قبل الإرسال.
+        // معاينة الصورة المختارة قبل الإرسال
         val previewBitmap = imgBmp
         if (previewBitmap != null) {
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1538,11 +1639,13 @@ fun AIChatTab(
                 IconButton(onClick = {
                     imgBmp = null
                     imgB64 = null
-                }) { Icon(Icons.Filled.Close, contentDescription = "إلغاء الصورة", tint = Color(0xFFE53935)) }
+                }) {
+                    Icon(Icons.Filled.Close, contentDescription = "إلغاء الصورة", tint = Color(0xFFE53935))
+                }
             }
         }
 
-        // شريط الإدخال: صورة / نص / ميكروفون / إرسال.
+        // شريط الإدخال: صورة / نص / ميكروفون / إرسال
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { imageLauncher.launch("image/*") }) {
                 Icon(Icons.Filled.Image, contentDescription = "صورة", tint = MaterialTheme.colorScheme.primary)
@@ -1568,10 +1671,8 @@ fun AIChatTab(
         }
     }
 }
-
-
 // =========================================================================================
-// 16. منطق معالج الامتحان (Exam Wizard Logic)
+// 17. منطق معالج الامتحان (Exam Wizard Logic)
 // =========================================================================================
 
 /**
@@ -1597,7 +1698,9 @@ fun loadCurriculum(state: ExamState, repo: CurriculumRepository, scope: Coroutin
     }
 }
 
-/** يولّد امتحان الـ 5 أسئلة من الدروس المحددة، وينتقل لشاشة الاختبار عند النجاح. */
+/**
+ * يولّد امتحان الـ 5 أسئلة من الدروس المحددة، وينتقل لشاشة الاختبار عند النجاح.
+ */
 fun generateExam(state: ExamState, aiEngine: GeminiAIEngine, scope: CoroutineScope) {
     val topics = state.chapters
         .flatMap { it.lessons }
@@ -1631,7 +1734,9 @@ fun generateExam(state: ExamState, aiEngine: GeminiAIEngine, scope: CoroutineSco
     }
 }
 
-/** زر/إيماءة الرجوع: يرجع خطوة واحدة ويلغي أي طلب جارٍ. */
+/**
+ * زر/إيماءة الرجوع: يرجع خطوة واحدة ويلغي أي طلب جارٍ.
+ */
 fun examGoBack(state: ExamState) {
     state.requestToken += 1
     state.curriculumLoading = false
@@ -1645,8 +1750,8 @@ fun examGoBack(state: ExamState) {
 }
 
 // =========================================================================================
-// 17. شاشة الامتحانات (Exam Wizard Tab)
-// الخطوات: الصف ← النظام ← الشعبة ← المادة ← (جلب المنهج من الـ AI) ← اختيار الدروس ← الاختبار ← النتيجة
+// 18. شاشة الامتحانات (Exam Wizard Tab)
+// الخطوات: الصف ← النظام ← الشعبة ← المادة ← (جلب المنهج) ← اختيار الدروس ← الاختبار ← النتيجة
 // =========================================================================================
 
 /** رأس الخطوة: زر رجوع (لو متاح) + العنوان. */
@@ -2001,7 +2106,7 @@ fun ExamWizardTab(
 }
 
 // =========================================================================================
-// 18. شاشة الإعدادات (Profile Tab)
+// 19. شاشة الإعدادات (Profile Tab)
 // - تشغيل/إيقاف الوضع الليلي.
 // - اختيار نغمة المنبه (RingtonePicker) وحفظها في SharedPreferences.
 // - فتح إعدادات النظام للسماح بالمنبهات الدقيقة.
