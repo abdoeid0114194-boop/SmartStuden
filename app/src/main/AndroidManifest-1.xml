@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    AndroidManifest.xml الخاص بتطبيق "الطالب الذكي".
+    ملاحظة: كل الكلاسات موجودة داخل ملف MainActivity.kt في الحزمة com.smartstudent.ui،
+    لذلك كتبنا أسماءها كاملة (Fully-Qualified) لتجنب أي خطأ في المسارات.
+    (لا يوجد package هنا لأن الـ namespace معرّف في ملف build.gradle).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- الاتصال بالإنترنت (Gemini API) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- المنبهات الدقيقة (أندرويد 12+) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- الإشعارات (أندرويد 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- الإدخال الصوتي في الدردشة -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- اهتزاز الجهاز عند رنين المنبه -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- مطلوب في أندرويد 11+ حتى يستطيع التطبيق اكتشاف خدمة التعرف على الصوت (SpeechRecognizer) -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <application
+        android:name="com.smartstudent.ui.MyApp"
+        android:allowBackup="true"
+        android:label="الطالب الذكي"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <!-- الشاشة الرئيسية. configChanges يمنع إعادة إنشاء الشاشة عند التدوير فلا تضيع المحادثة -->
+        <activity
+            android:name="com.smartstudent.ui.MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- مستقبل المنبه: يشغّل النغمة والإشعار في موعد المهمة -->
+        <receiver
+            android:name="com.smartstudent.ui.AlarmReceiver"
+            android:exported="false" />
+
+    </application>
+
+</manifest>
