@@ -33,6 +33,7 @@
     <application
         android:name="com.smartstudent.ui.MyApp"
         android:allowBackup="true"
+        android:icon="@drawable/app_icon"
         android:label="الطالب الذكي"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
