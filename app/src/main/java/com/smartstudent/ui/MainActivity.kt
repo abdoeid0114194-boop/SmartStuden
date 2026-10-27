@@ -2,9 +2,14 @@
 
 package com.smartstudent.ui
 
+// =========================================================================================
+// الاستيرادات (Imports)
+// ملاحظة: استخدمنا استيرادات صريحة لكلاسات android.app حتى لا يحدث تعارض في الأسماء مع
+// Material3 (مثل DatePickerDialog و AlertDialog).
+// =========================================================================================
 import android.Manifest
+import android.app.Activity
 import android.app.AlarmManager
-import android.app.AlertDialog
 import android.app.Application
 import android.app.DatePickerDialog
 import android.app.NotificationChannel
@@ -18,87 +23,42 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
+import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.Settings
+import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Base64
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image as FoundationImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.AlertDialogDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -109,16 +69,26 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import com.smartstudent.BuildConfig
+import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -127,35 +97,203 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.util.Calendar
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 // =========================================================================================
-// 1. كلاسات البيانات (Data Classes) - تم تفصيلها بالكامل
+// 1. الإعدادات العامة (App Config)
+// هنا كل الثوابت في مكان واحد: أسماء الـ SharedPreferences، قائمة الموديلات الاحتياطية،
+// وخيارات شاشة الامتحانات (الصف / النظام / الشعبة). لاحظ أن هذه خيارات واجهة فقط،
+// أما أبواب ودروس المنهج فتأتي بالكامل من Gemini ولا يوجد أي منهج ثابت في الكود.
+// =========================================================================================
+object AppConfig {
+    /** اسم ملف الإعدادات المحلي. */
+    const val PREFS_NAME = "smartstudent_prefs"
+
+    /** مفتاح حفظ حالة الوضع الليلي. */
+    const val KEY_DARK = "dark"
+
+    /** مفتاح حفظ مسار نغمة المنبه المختارة. */
+    const val KEY_RINGTONE = "ringtone"
+
+    /** مفتاح حفظ قائمة المهام بصيغة JSON. */
+    const val KEY_TASKS = "tasks_json"
+
+    /** معرّف قناة الإشعارات الخاصة بالمنبهات. */
+    const val ALARM_CHANNEL_ID = "smartstudent_alarm_channel"
+
+    /** اسم الـ Extra الذي يحمل عنوان المهمة داخل الـ Intent. */
+    const val EXTRA_TASK_TITLE = "title"
+
+    /** أقصى مدة (بالمللي ثانية) يظل فيها صوت المنبه شغالاً. */
+    const val ALARM_RING_MILLIS = 30_000L
+
+    /** عنوان الـ API الأساسي لـ Gemini. */
+    const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
+
+    /**
+     * الموديلات الاحتياطية بالترتيب. لو الأول فشل (404 أو أي خطأ) ننتقل للتالي تلقائياً.
+     * موديلات gemini-1.5 القديمة اتوقفت وبترجع 404، فاستبدلناها بالموديلات الحالية.
+     * تقدر تعدل هذه القائمة بسهولة لو Google أصدرت موديلاً أحدث.
+     */
+    val FALLBACK_MODELS: List<String> = listOf(
+        "gemini-3.8-flash",
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro"
+    )
+
+    /** خيارات الصف الدراسي. */
+    val GRADES: List<String> = listOf("الأول الثانوي", "الثاني الثانوي", "الثالث الثانوي")
+
+    /** خيارات النظام التعليمي. */
+    val SYSTEMS: List<String> = listOf("عام", "لغات", "أزهر")
+
+    /** اسم الشعبة العامة للصف الأول الثانوي (لا توجد شعب في الصف الأول). */
+    const val GENERAL_STREAM = "عام (بدون شعبة)"
+
+    /** خيارات الشعبة من الصف الثاني الثانوي وما بعده. */
+    val STREAMS: List<String> = listOf("علمي علوم", "علمي رياضة", "أدبي")
+}
+
+/**
+ * ترجع قائمة المواد المتاحة بحسب الشعبة المختارة.
+ * هذه أسماء مواد فقط (خيارات للواجهة) وليست محتوى منهج.
+ */
+fun subjectsFor(stream: String): List<String> = when (stream) {
+    "علمي علوم" -> listOf("أحياء", "كيمياء", "فيزياء", "لغة عربية", "لغة إنجليزية")
+    "علمي رياضة" -> listOf("رياضيات", "فيزياء", "كيمياء", "لغة عربية", "لغة إنجليزية")
+    "أدبي" -> listOf("تاريخ", "جغرافيا", "فلسفة ومنطق", "علم نفس واجتماع", "لغة عربية", "لغة إنجليزية")
+    else -> listOf("أحياء", "كيمياء", "فيزياء", "رياضيات", "لغة عربية", "لغة إنجليزية")
+}
+
+// =========================================================================================
+// 2. الكلاسات الأساسية: Application و BroadcastReceiver للمنبه
 // =========================================================================================
 
-/**
- * يمثل درساً واحداً داخل باب معين في المنهج الدراسي.
- */
-data class Lesson(
-    val id: Long,
-    val title: String
-)
+/** كلاس التطبيق الرئيسي، يحتفظ بنسخة ثابتة من الـ Application عند الحاجة. */
+class MyApp : Application() {
+    companion object {
+        lateinit var instance: MyApp
+            private set
+    }
+
+    /** يُستدعى عند تشغيل التطبيق لأول مرة. */
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
+}
 
 /**
- * يمثل فصلاً (أو باباً) في مادة دراسية.
+ * مستقبل المنبه: عند حلول وقت المهمة يشغّل النغمة المختارة ويهزّ الجهاز ويعرض إشعاراً.
  */
-data class Chapter(
-    val id: Long,
-    val title: String,
-    val lessons: List<Lesson>
-)
+class AlarmReceiver : BroadcastReceiver() {
 
-/**
- * يمثل رسالة دردشة بين المستخدم والذكاء الاصطناعي.
- */
+    companion object {
+        /** نحتفظ بمرجع للنغمة حتى لا يلتقطها الـ Garbage Collector ويوقف الصوت. */
+        private var activeRingtone: Ringtone? = null
+    }
+
+    /** نقطة الدخول: تُستدعى من AlarmManager في الموعد المحدد. */
+    override fun onReceive(context: Context, intent: Intent) {
+        val title = intent.getStringExtra(AppConfig.EXTRA_TASK_TITLE) ?: "مهمة دراسية"
+        playRingtone(context)
+        vibrateDevice(context)
+        showNotification(context, title)
+    }
+
+    /** تشغيل النغمة المحفوظة في الإعدادات (أو نغمة المنبه الافتراضية) ثم إيقافها تلقائياً. */
+    private fun playRingtone(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(AppConfig.PREFS_NAME, Context.MODE_PRIVATE)
+            val saved = prefs.getString(AppConfig.KEY_RINGTONE, null)
+            val uri: Uri = if (!saved.isNullOrBlank()) {
+                Uri.parse(saved)
+            } else {
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            }
+            activeRingtone?.stop()
+            val ringtone = RingtoneManager.getRingtone(context.applicationContext, uri)
+            if (ringtone != null) {
+                ringtone.audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                activeRingtone = ringtone
+                ringtone.play()
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        ringtone.stop()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }, AppConfig.ALARM_RING_MILLIS)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /** اهتزاز الجهاز بنمط متقطع مع مراعاة اختلاف الـ API بين الإصدارات. */
+    @Suppress("DEPRECATION")
+    private fun vibrateDevice(context: Context) {
+        try {
+            val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
+            val pattern = longArrayOf(0, 500, 300, 500, 300, 500)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            } else {
+                vibrator.vibrate(pattern, -1)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /** إنشاء قناة الإشعارات (أندرويد 8+) وعرض إشعار "حان الوقت!" عند الضغط عليه يفتح التطبيق. */
+    private fun showNotification(context: Context, title: String) {
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                AppConfig.ALARM_CHANNEL_ID,
+                "منبهات المذاكرة",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            channel.description = "تنبيهات مواعيد المذاكرة والمهام"
+            // الصوت بيتشغل من الـ Ringtone نفسه، فنلغي صوت القناة عشان ما يحصلش تكرار.
+            channel.setSound(null, null)
+            nm.createNotificationChannel(channel)
+        }
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val openPending = PendingIntent.getActivity(
+            context, 0, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, AppConfig.ALARM_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("حان الوقت!")
+            .setContentText(title)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setContentIntent(openPending)
+            .setAutoCancel(true)
+            .build()
+        nm.notify(System.currentTimeMillis().toInt(), notification)
+    }
+}
+
+// =========================================================================================
+// 3. نماذج البيانات (Data Models)
+// =========================================================================================
+
+/** درس واحد داخل باب. */
+data class Lesson(val id: Long, val title: String)
+
+/** باب كامل يحتوي على مجموعة دروس. */
+data class Chapter(val id: Long, val title: String, val lessons: List<Lesson>)
+
+/** رسالة في شاشة الدردشة (نص + صورة اختيارية + علامة خطأ). */
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val text: String,
@@ -164,9 +302,7 @@ data class ChatMessage(
     val imageBitmap: Bitmap? = null
 )
 
-/**
- * يمثل سؤالاً في الاختبار التفاعلي.
- */
+/** سؤال اختيار من متعدد مع رقم الإجابة الصحيحة (يبدأ من 0) والشرح. */
 data class QuizQuestion(
     val text: String,
     val options: List<String>,
@@ -174,197 +310,414 @@ data class QuizQuestion(
     val explanation: String
 )
 
-/**
- * يمثل مهمة دراسية أو منبهاً.
- */
+/** مهمة دراسية لها موعد تنبيه. */
 data class StudyTask(
     val id: Long,
     val title: String,
-    val timeStr: String,
     val triggerAt: Long,
     val done: Boolean = false
 )
 
-// =========================================================================================
-// 2. مستودع المناهج (Curriculum Repository) - بيانات تجريبية شاملة
-// =========================================================================================
+/** رد محرك الذكاء الاصطناعي: نص + هل هو خطأ؟ */
+data class AIResponse(val text: String, val isError: Boolean = false)
 
-interface CurriculumRepository {
-    suspend fun getChapters(subject: String): List<Chapter>
+/** نتيجة جلب المنهج: إما نجاح بقائمة أبواب، أو فشل برسالة. */
+sealed class CurriculumResult {
+    data class Success(val chapters: List<Chapter>) : CurriculumResult()
+    data class Failure(val message: String) : CurriculumResult()
 }
 
-class MockCurriculumRepository : CurriculumRepository {
-    override suspend fun getChapters(subject: String): List<Chapter> {
-        delay(300) // محاكاة وقت التحميل
-        return when (subject) {
-            "فيزياء" -> listOf(
-                Chapter(1, "الباب الأول: الحركة", listOf(Lesson(1, "السرعة"), Lesson(2, "التسارع"), Lesson(3, "معادلات الحركة"))),
-                Chapter(2, "الباب الثاني: الطاقة", listOf(Lesson(4, "الشغل"), Lesson(5, "الطاقة الحركية"), Lesson(6, "الطاقة الكامنة"))),
-                Chapter(3, "الباب الثالث: الكهرباء", listOf(Lesson(7, "التيار الكهربي"), Lesson(8, "قانون أوم"), Lesson(9, "المكثفات")))
-            )
-            "كيمياء" -> listOf(
-                Chapter(4, "الباب الأول: الكيمياء الحرارية", listOf(Lesson(10, "المحتوى الحراري"), Lesson(11, "حرارة التكوين"))),
-                Chapter(5, "الباب الثاني: الاتزان", listOf(Lesson(12, "الاتزان الكيميائي"), Lesson(13, "ثابت الاتزان"))),
-                Chapter(6, "الباب الثالث: الأحماض والقواعد", listOf(Lesson(14, "مفهوم الأحماض"), Lesson(15, "الرقم الهيدروجيني")))
-            )
-            "أحياء" -> listOf(
-                Chapter(7, "الباب الأول: الدعامة والحركة", listOf(Lesson(16, "الدعامة في النبات"), Lesson(17, "الحركة في الإنسان"))),
-                Chapter(8, "الباب الثاني: التكاثر", listOf(Lesson(18, "التكاثر في النبات"), Lesson(19, "التكاثر في الإنسان"))),
-                Chapter(9, "الباب الثالث: الوراثة", listOf(Lesson(20, "قوانين مندل"), Lesson(21, "الوراثة الجنسية")))
-            )
-            "رياضيات" -> listOf(
-                Chapter(10, "الباب الأول: الجبر", listOf(Lesson(22, "المعادلات"), Lesson(23, "المتباينات"))),
-                Chapter(11, "الباب الثاني: التفاضل", listOf(Lesson(24, "النهايات"), Lesson(25, "الاشتقاق"))),
-                Chapter(12, "الباب الثالث: التكامل", listOf(Lesson(26, "التكامل غير المحدود"), Lesson(27, "التكامل المحدود")))
-            )
-            "لغة عربية" -> listOf(
-                Chapter(13, "الباب الأول: النحو", listOf(Lesson(28, "المبتدأ والخبر"), Lesson(29, "كان وأخواتها"))),
-                Chapter(14, "الباب الثاني: البلاغة", listOf(Lesson(30, "التشبيه"), Lesson(31, "الاستعارة"))),
-                Chapter(15, "الباب الثالث: الأدب", listOf(Lesson(32, "مدارس الشعر"), Lesson(33, "النثر")))
-            )
-            "لغة إنجليزية" -> listOf(
-                Chapter(16, "Unit 1: Grammar", listOf(Lesson(34, "Present Simple"), Lesson(35, "Past Simple"))),
-                Chapter(17, "Unit 2: Vocabulary", listOf(Lesson(36, "Phrasal Verbs"), Lesson(37, "Collocations")))
-            )
-            else -> emptyList()
+// =========================================================================================
+// 4. تخزين المهام (Task Store)
+// يحفظ المهام في SharedPreferences بصيغة JSON حتى لا تضيع عند إغلاق التطبيق.
+// =========================================================================================
+object TaskStore {
+
+    /** قراءة كل المهام المحفوظة، وترجع قائمة فاضية لو حصل أي خطأ في القراءة. */
+    fun load(prefs: SharedPreferences): List<StudyTask> {
+        val raw = prefs.getString(AppConfig.KEY_TASKS, null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            val result = mutableListOf<StudyTask>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                result.add(
+                    StudyTask(
+                        id = o.getLong("id"),
+                        title = o.getString("title"),
+                        triggerAt = o.getLong("triggerAt"),
+                        done = o.optBoolean("done", false)
+                    )
+                )
+            }
+            result
+        } catch (e: Exception) {
+            emptyList()
         }
+    }
+
+    /** حفظ قائمة المهام كاملة. */
+    fun save(prefs: SharedPreferences, tasks: List<StudyTask>) {
+        val arr = JSONArray()
+        tasks.forEach { t ->
+            arr.put(
+                JSONObject()
+                    .put("id", t.id)
+                    .put("title", t.title)
+                    .put("triggerAt", t.triggerAt)
+                    .put("done", t.done)
+            )
+        }
+        prefs.edit().putString(AppConfig.KEY_TASKS, arr.toString()).apply()
     }
 }
 
 // =========================================================================================
-// 3. محرك الذكاء الاصطناعي (Gemini AI Engine) - مع النماذج الاحتياطية
+// 5. محرك الذكاء الاصطناعي (Gemini AI Engine)
+// - يستخدم OkHttp للاتصال بـ Gemini.
+// - نظام التبديل التلقائي (Fallback): لو موديل فشل ينتقل للتالي في حلقة حتى ينجح أحدهم.
+// - مفتاح الـ API من BuildConfig.GEMINI_API_KEY.
 // =========================================================================================
-
-data class AIResponse(
-    val candidates: List<Candidate>,
-    val isError: Boolean = false
-)
-
-data class Candidate(
-    val content: Content
-)
-
-data class Content(
-    val parts: List<Part>
-)
-
-data class Part(
-    val text: String
-)
-
-fun aiOk(text: String) = AIResponse(listOf(Candidate(Content(listOf(Part(text))))))
-fun aiError(text: String) = AIResponse(listOf(Candidate(Content(listOf(Part(text))))), isError = true)
-fun AIResponse.text(): String = candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text.orEmpty()
-
-suspend fun safeAi(block: suspend () -> AIResponse): AIResponse = try {
-    block()
-} catch (e: Exception) {
-    aiError("حدث خطأ غير متوقع: ${e.message}")
-}
-
 class GeminiAIEngine {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+
+    /** عميل الشبكة. المهلة 90 ثانية للقراءة لأن بعض الموديلات "بتفكر" قبل الرد. */
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .callTimeout(120, TimeUnit.SECONDS)
         .build()
 
+    /** مفتاح الـ API كما تم حقنه وقت البناء. */
     private val apiKey: String = BuildConfig.GEMINI_API_KEY.trim()
-    
-    private val fallbackModels = listOf(
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-pro-latest",
-        "gemini-1.5-flash",
-        "gemini-pro"
-    )
 
-    private suspend fun makeRequest(payload: JSONObject): AIResponse = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) return@withContext aiError("مفتاح API غير موجود.")
-        
-        var lastError = ""
-        
-        for (model in fallbackModels) {
-            val req = Request.Builder()
-                .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
-                .header("x-goog-api-key", apiKey)
-                .post(payload.toString().toRequestBody("application/json".toMediaType()))
-                .build()
+    /** تعليمات النظام للمساعد الدراسي في شاشة الدردشة. */
+    private val chatSystemPrompt: String =
+        "أنت \"الطالب الذكي\"، مساعد دراسي لطلاب الثانوية العامة في مصر. " +
+            "اشرح بأسلوب بسيط ومرتب وبخطوات واضحة، وبالعربية (يُفضّل بلهجة مصرية مبسطة). " +
+            "التزم بالمنهج المصري، وإذا لم تكن متأكداً من معلومة فقل ذلك بوضوح. " +
+            "إذا أرسل الطالب صورة سؤال فحلّه وشرح الفكرة وراء الحل."
 
-            try {
-                client.newCall(req).execute().use { resp ->
-                    val raw = resp.body?.string().orEmpty()
-                    if (resp.isSuccessful) {
-                        val root = JSONObject(raw)
-                        val candidates = root.optJSONArray("candidates")
-                        if (candidates != null && candidates.length() > 0) {
-                            val txt = candidates.getJSONObject(0)
-                                .optJSONObject("content")
-                                ?.optJSONArray("parts")
-                                ?.optJSONObject(0)
-                                ?.optString("text").orEmpty()
-                            if (txt.isNotBlank()) return@withContext aiOk(txt)
+    /**
+     * الدالة الأساسية لإرسال الطلب. تجرب الموديلات واحداً تلو الآخر.
+     * @param payload جسم الطلب بصيغة JSON.
+     * @param jsonMode لو true نطلب من Gemini إرجاع JSON صرف (يُستخدم عند جلب المنهج).
+     */
+    private suspend fun makeRequest(payload: JSONObject, jsonMode: Boolean = false): AIResponse =
+        withContext(Dispatchers.IO) {
+            if (apiKey.isBlank()) {
+                return@withContext AIResponse("مفتاح API غير موجود. تأكد من ضبط GEMINI_API_KEY في ملف البناء.", true)
+            }
+            if (jsonMode) {
+                payload.put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
+            }
+            val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            var lastError = "لا توجد تفاصيل للخطأ"
+
+            for (model in AppConfig.FALLBACK_MODELS) {
+                ensureActive() // لو المستخدم خرج من الشاشة نوقف المحاولات
+                val request = Request.Builder()
+                    .url("${AppConfig.GEMINI_BASE_URL}$model:generateContent")
+                    .header("x-goog-api-key", apiKey)
+                    .post(body)
+                    .build()
+                try {
+                    client.newCall(request).execute().use { response ->
+                        val raw = response.body?.string().orEmpty()
+                        if (response.isSuccessful) {
+                            val text = extractText(raw)
+                            if (text.isNotBlank()) {
+                                return@withContext AIResponse(text)
+                            }
+                            lastError = "الموديل $model رجّع رداً فارغاً"
+                        } else {
+                            lastError = "خطأ ${response.code} في موديل $model: ${extractErrorMessage(raw)}"
                         }
-                    } else {
-                        lastError = "خطأ ${resp.code} في موديل $model"
                     }
+                } catch (e: Exception) {
+                    lastError = "فشل الاتصال بموديل $model: ${e.message}"
                 }
-            } catch (e: Exception) {
-                lastError = "فشل الاتصال بموديل $model: ${e.message}"
             }
+            AIResponse("فشلت كل محاولات الاتصال بالذكاء الاصطناعي.\n$lastError", true)
         }
-        
-        return@withContext aiError("فشل الاتصال بعدة محاولات.\n$lastError")
+
+    /** يستخرج النص من رد Gemini (يتجاهل أجزاء "التفكير" ويجمع باقي الأجزاء). */
+    private fun extractText(raw: String): String {
+        return try {
+            val candidates = JSONObject(raw).optJSONArray("candidates") ?: return ""
+            if (candidates.length() == 0) return ""
+            val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return ""
+            val sb = StringBuilder()
+            for (i in 0 until parts.length()) {
+                val part = parts.optJSONObject(i) ?: continue
+                if (part.optBoolean("thought", false)) continue
+                sb.append(part.optString("text", ""))
+            }
+            sb.toString().trim()
+        } catch (e: Exception) {
+            ""
+        }
     }
 
+    /** يستخرج رسالة الخطأ المختصرة من رد الخطأ (أو يرجع بداية الرد الخام). */
+    private fun extractErrorMessage(raw: String): String {
+        return try {
+            JSONObject(raw).optJSONObject("error")?.optString("message").orEmpty().ifBlank { raw.take(120) }
+        } catch (e: Exception) {
+            raw.take(120)
+        }
+    }
+
+    /** يحوّل نصاً واحداً إلى جسم طلب بسيط (user prompt). */
+    private fun simplePayload(prompt: String): JSONObject {
+        val parts = JSONArray().put(JSONObject().put("text", prompt))
+        val contents = JSONArray().put(JSONObject().put("role", "user").put("parts", parts))
+        return JSONObject().put("contents", contents)
+    }
+
+    /**
+     * الدردشة: نرسل آخر رسائل المحادثة (بدون رسائل الخطأ)، ولو فيه صورة نرفقها بآخر رسالة للمستخدم.
+     */
     suspend fun chat(history: List<ChatMessage>, imageBase64: String? = null): AIResponse {
+        // Gemini لازم أول رسالة في المحادثة تكون من المستخدم، لذلك نحذف أي رسائل "model" في البداية.
+        val usable = history
+            .filter { !it.isError && it.text.isNotBlank() }
+            .takeLast(10)
+            .dropWhile { !it.isUser }
+        if (usable.isEmpty()) return AIResponse("لا توجد رسالة لإرسالها.", true)
+
         val contents = JSONArray()
-        
-        history.takeLast(4).forEach { msg ->
+        usable.forEachIndexed { index, msg ->
             val parts = JSONArray().put(JSONObject().put("text", msg.text))
-            val messageObject = JSONObject()
-                .put("role", if (msg.isUser) "user" else "model")
-                .put("parts", parts)
-            contents.put(messageObject)
-        }
-        
-        if (imageBase64 != null) {
-            val parts = JSONArray().apply {
-                put(JSONObject().put("text", "حلل هذه الصورة وساعدني."))
-                put(JSONObject().put("inline_data", JSONObject().put("mime_type", "image/jpeg").put("data", imageBase64)))
+            val isLastUserMessage = index == usable.lastIndex && msg.isUser
+            if (isLastUserMessage && imageBase64 != null) {
+                parts.put(
+                    JSONObject().put(
+                        "inlineData",
+                        JSONObject().put("mimeType", "image/jpeg").put("data", imageBase64)
+                    )
+                )
             }
-            contents.put(JSONObject().put("role", "user").put("parts", parts))
+            contents.put(JSONObject().put("role", if (msg.isUser) "user" else "model").put("parts", parts))
         }
-        
-        return makeRequest(JSONObject().put("contents", contents))
+        val payload = JSONObject()
+            .put("contents", contents)
+            .put(
+                "systemInstruction",
+                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", chatSystemPrompt)))
+            )
+        return makeRequest(payload)
     }
 
-    suspend fun generateInteractiveExam(grade: String, system: String, stream: String, subject: String, topics: String): AIResponse {
+    /**
+     * يطلب من Gemini أبواب ودروس المادة حسب المنهج المصري الحقيقي بصيغة JSON صارمة.
+     * الشكل المطلوب: {"chapters":[{"title":"...","lessons":["...","..."]}]}
+     */
+    suspend fun generateCurriculum(grade: String, system: String, stream: String, subject: String): AIResponse {
         val prompt = """
-            أنت معلم خبير.
-            اكتب اختباراً تفاعلياً من 5 أسئلة لمادة $subject.
-            (الصف: $grade، النظام: $system، الشعبة: $stream).
-            المواضيع المحددة: $topics.
-            
-            التنسيق المطلوب:
-            Q: [سؤال]
-            O1: [خيار1]
-            O2: [خيار2]
-            O3: [خيار3]
-            O4: [خيار4]
-            C: [رقم الصح 1-4]
-            E: [شرح]
+            أنت خبير في المناهج الرسمية لوزارة التربية والتعليم في مصر.
+            اذكر أبواب ودروس مادة "$subject" للصف "$grade" بنظام "$system" والشعبة "$stream"،
+            حسب المنهج المصري الحقيقي والمعتمد حالياً، وبترتيب الكتاب المدرسي.
+            أرجع JSON صارماً فقط، بدون أي نص قبله أو بعده وبدون Markdown، بهذا الشكل بالضبط:
+            {"chapters":[{"title":"اسم الباب","lessons":["اسم الدرس 1","اسم الدرس 2"]}]}
+            الشروط: من 3 إلى 10 أبواب، وكل باب من 2 إلى 8 دروس، والأسماء بالعربية (أو الإنجليزية لمادة اللغة الإنجليزية).
         """.trimIndent()
-        
-        val payload = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
-        return makeRequest(payload)
+        return makeRequest(simplePayload(prompt), jsonMode = true)
+    }
+
+    /**
+     * يولّد امتحاناً من 5 أسئلة اختيار من متعدد بالتنسيق الصارم:
+     * Q: السؤال، O1..O4: الخيارات، C: رقم الإجابة الصحيحة، E: الشرح.
+     */
+    suspend fun generateInteractiveExam(
+        grade: String,
+        system: String,
+        stream: String,
+        subject: String,
+        topics: String
+    ): AIResponse {
+        val prompt = """
+            أنت معلم مصري متخصص. اكتب اختباراً تفاعلياً من 5 أسئلة اختيار من متعدد لمادة $subject
+            (الصف: $grade، النظام: $system، الشعبة: $stream) حسب المنهج المصري.
+            الدروس المطلوبة: $topics.
+            التزم بهذا التنسيق حرفياً لكل سؤال، كل عنصر في سطر مستقل، بدون Markdown وبدون أي مقدمة أو خاتمة:
+            Q: [نص السؤال]
+            O1: [الخيار الأول]
+            O2: [الخيار الثاني]
+            O3: [الخيار الثالث]
+            O4: [الخيار الرابع]
+            C: [رقم الإجابة الصحيحة من 1 إلى 4]
+            E: [شرح مختصر للإجابة الصحيحة]
+        """.trimIndent()
+        return makeRequest(simplePayload(prompt))
     }
 }
 
 // =========================================================================================
-// 4. الثيم والألوان (Theme)
+// 6. مستودع المنهج (Curriculum Repository)
+// بدل البيانات الثابتة (Mock Data) صار المنهج يُجلب من Gemini ويُحلَّل من JSON،
+// مع تخزين مؤقت في الذاكرة حتى لا نكرر الطلب لنفس المادة.
 // =========================================================================================
 
+/** واجهة المستودع. */
+interface CurriculumRepository {
+    /** يرجع أبواب ودروس المادة (نجاح بقائمة، أو فشل برسالة). */
+    suspend fun getChapters(grade: String, system: String, stream: String, subject: String): CurriculumResult
+}
+
+/** تنفيذ المستودع الذي يعتمد على Gemini. */
+class AiCurriculumRepository(private val aiEngine: GeminiAIEngine) : CurriculumRepository {
+
+    /** كاش بسيط في الذاكرة: المفتاح هو (الصف|النظام|الشعبة|المادة). */
+    private val cache = mutableMapOf<String, List<Chapter>>()
+
+    /** يرجع الأبواب من الكاش لو موجودة، وإلا يطلبها من Gemini ويحللها. */
+    override suspend fun getChapters(
+        grade: String,
+        system: String,
+        stream: String,
+        subject: String
+    ): CurriculumResult {
+        val key = "$grade|$system|$stream|$subject"
+        cache[key]?.let { return CurriculumResult.Success(it) }
+
+        val response = aiEngine.generateCurriculum(grade, system, stream, subject)
+        if (response.isError) return CurriculumResult.Failure(response.text)
+
+        return try {
+            val chapters = CurriculumParser.parse(response.text)
+            if (chapters.isEmpty()) {
+                CurriculumResult.Failure("الذكاء الاصطناعي لم يرجّع أبواباً مفهومة. جرّب مرة أخرى.")
+            } else {
+                cache[key] = chapters
+                CurriculumResult.Success(chapters)
+            }
+        } catch (e: Exception) {
+            CurriculumResult.Failure("تعذّر قراءة المنهج (الرد ليس JSON صحيحاً). جرّب مرة أخرى.")
+        }
+    }
+}
+
+/** محلل JSON الخاص بالمنهج: يحوّل رد Gemini إلى قائمة Chapters و Lessons باستخدام JSONObject/JSONArray. */
+object CurriculumParser {
+
+    /** يقصّ النص من أول { أو [ إلى آخر } أو ] لتجاهل أي كلام زائد أو علامات Markdown. */
+    private fun extractJsonBlock(raw: String): String {
+        val cleaned = raw.replace("```json", "").replace("```", "").trim()
+        val start = cleaned.indexOfFirst { it == '{' || it == '[' }
+        val end = cleaned.indexOfLast { it == '}' || it == ']' }
+        return if (start >= 0 && end > start) cleaned.substring(start, end + 1) else cleaned
+    }
+
+    /** التحليل الرئيسي. يدعم رد على شكل {"chapters":[...]} أو مصفوفة مباشرة [...]. */
+    fun parse(raw: String): List<Chapter> {
+        val json = extractJsonBlock(raw)
+        val chaptersArray: JSONArray = if (json.trimStart().startsWith("[")) {
+            JSONArray(json)
+        } else {
+            JSONObject(json).optJSONArray("chapters") ?: JSONArray()
+        }
+
+        val result = mutableListOf<Chapter>()
+        for (i in 0 until chaptersArray.length()) {
+            val chapterObj = chaptersArray.optJSONObject(i) ?: continue
+            val chapterTitle = chapterObj.optString("title", "").trim()
+            val lessonsArray = chapterObj.optJSONArray("lessons") ?: continue
+            val chapterId = (i + 1) * 1000L
+
+            val lessons = mutableListOf<Lesson>()
+            for (j in 0 until lessonsArray.length()) {
+                val item = lessonsArray.opt(j)
+                val lessonTitle: String = when (item) {
+                    is String -> item
+                    is JSONObject -> item.optString("title", item.optString("name", ""))
+                    else -> ""
+                }
+                if (lessonTitle.isNotBlank()) {
+                    lessons.add(Lesson(chapterId + j + 1, lessonTitle.trim()))
+                }
+            }
+            if (chapterTitle.isNotBlank() && lessons.isNotEmpty()) {
+                result.add(Chapter(chapterId, chapterTitle, lessons))
+            }
+        }
+        return result
+    }
+}
+
+// =========================================================================================
+// 7. محلل الامتحان (Quiz Parser)
+// يحوّل نص Gemini ذي التنسيق (Q / O1-O4 / C / E) إلى قائمة QuizQuestion.
+// مرن مع علامات Markdown مثل ** أو أرقام الأسئلة (Q1:) أو الشرطات في بداية السطر.
+// =========================================================================================
+fun parseQuiz(text: String): List<QuizQuestion> {
+    val questions = mutableListOf<QuizQuestion>()
+    val qRegex = Regex("^Q\\d*\\s*[:：]\\s*(.*)$", RegexOption.IGNORE_CASE)
+    val oRegex = Regex("^O([1-4])\\s*[:：]\\s*(.*)$", RegexOption.IGNORE_CASE)
+    val cRegex = Regex("^C\\s*[:：]\\s*([1-4])", RegexOption.IGNORE_CASE)
+    val eRegex = Regex("^E\\s*[:：]\\s*(.*)$", RegexOption.IGNORE_CASE)
+
+    var qText = ""
+    var options = arrayOfNulls<String>(4)
+    var correct = -1
+    var explanation = ""
+    var lastWasExplanation = false
+
+    /** يضيف السؤال الحالي للقائمة لو كانت بياناته مكتملة ثم يصفّر الحالة. */
+    fun flush() {
+        if (qText.isNotBlank() && correct in 0..3 && options.all { !it.isNullOrBlank() }) {
+            questions.add(QuizQuestion(qText, options.map { it.orEmpty() }, correct, explanation.trim()))
+        }
+        qText = ""
+        options = arrayOfNulls(4)
+        correct = -1
+        explanation = ""
+        lastWasExplanation = false
+    }
+
+    val cleanText = text.replace("```json", "").replace("```", "").replace("**", "")
+    for (rawLine in cleanText.lines()) {
+        val line = rawLine.trim().trimStart('-', '•', '#', ' ')
+        if (line.isEmpty()) continue
+
+        val q = qRegex.find(line)
+        val o = oRegex.find(line)
+        val c = cRegex.find(line)
+        val e = eRegex.find(line)
+        when {
+            q != null -> {
+                flush()
+                qText = q.groupValues[1].trim()
+            }
+            o != null -> {
+                options[o.groupValues[1].toInt() - 1] = o.groupValues[2].trim()
+                lastWasExplanation = false
+            }
+            c != null -> {
+                correct = c.groupValues[1].toInt() - 1
+                lastWasExplanation = false
+            }
+            e != null -> {
+                explanation = e.groupValues[1].trim()
+                lastWasExplanation = true
+            }
+            lastWasExplanation -> explanation += " " + line
+            else -> Unit
+        }
+    }
+    flush()
+    return questions
+}
+
+
+// =========================================================================================
+// 8. الثيم (Material Design 3 + RTL + Gradient + Dark Mode)
+// =========================================================================================
 private val Indigo = Color(0xFF4F46E5)
-private val BrandGradient = Brush.linearGradient(listOf(Color(0xFF8B5CF6), Indigo))
+private val Violet = Color(0xFF8B5CF6)
+
+/** التدرج الرئيسي (بنفسجي → إندجو) المستخدم في الهيدر والبطاقات المميزة. */
+private val BrandGradient = Brush.linearGradient(listOf(Violet, Indigo))
 
 private val LightColors = lightColorScheme(
     primary = Indigo,
@@ -380,6 +733,9 @@ private val DarkColors = darkColorScheme(
     surface = Color(0xFF181B24)
 )
 
+/**
+ * ثيم التطبيق: يفرض اتجاه RTL للعربية ويختار الألوان الفاتحة أو الداكنة.
+ */
 @Composable
 fun SmartStudentTheme(darkTheme: Boolean = false, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -391,69 +747,81 @@ fun SmartStudentTheme(darkTheme: Boolean = false, content: @Composable () -> Uni
 }
 
 // =========================================================================================
-// 5. نظام المنبهات في الخلفية (Alarms)
+// 9. مكونات واجهة مشتركة (Shared UI Components)
 // =========================================================================================
 
-class MyApp : Application() {
-    companion object {
-        lateinit var instance: MyApp
-    }
-    override fun onCreate() {
-        super.onCreate()
-        instance = this
+/** بطاقة بخلفية متدرجة تعرض عنواناً ونصاً فرعياً. */
+@Composable
+fun GradientCard(title: String, subtitle: String, modifier: Modifier = Modifier) {
+    Card(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))) {
+        Column(Modifier.background(BrandGradient).padding(20.dp)) {
+            Text(
+                title,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(subtitle, color = Color.White.copy(alpha = 0.9f))
+        }
     }
 }
 
-class AlarmReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        val title = intent.getStringExtra("title") ?: "مهمة"
-        val prefs = context.getSharedPreferences("smartstudent_prefs", Context.MODE_PRIVATE)
-        val uri = Uri.parse(prefs.getString("ringtone", null) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM).toString())
-        
-        try {
-            RingtoneManager.getRingtone(context, uri).play()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            nm.createNotificationChannel(NotificationChannel("alarm", "منبه", NotificationManager.IMPORTANCE_HIGH))
-        }
-        
-        NotificationManagerCompat.from(context).notify(
-            System.currentTimeMillis().toInt(),
-            NotificationCompat.Builder(context, "alarm")
-                .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                .setContentTitle("حان الوقت!")
-                .setContentText(title)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .build()
+/** بطاقة خيار قابلة للضغط تُستخدم في خطوات معالج الامتحان. */
+@Composable
+fun OptionCard(text: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(16.dp),
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
 
-// =========================================================================================
-// 6. التطبيق الرئيسي والواجهة (Main Activity & UI)
-// =========================================================================================
+/** عنوان قسم موحّد. */
+@Composable
+fun SectionTitle(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onBackground
+    )
+}
 
+// =========================================================================================
+// 10. النشاط الرئيسي (MainActivity)
+// =========================================================================================
 class MainActivity : ComponentActivity() {
-    private val aiEngine = GeminiAIEngine()
-    private val repo = MockCurriculumRepository()
 
+    /** محرك الذكاء الاصطناعي (نسخة واحدة لكل التطبيق). */
+    private val aiEngine = GeminiAIEngine()
+
+    /** مستودع المنهج المعتمد على الذكاء الاصطناعي بدل البيانات الثابتة. */
+    private val repo: CurriculumRepository = AiCurriculumRepository(aiEngine)
+
+    /** طلب صلاحية الإشعارات (أندرويد 13+). */
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* لا شيء نفعله هنا */ }
+
+    /** نقطة بداية التطبيق: يطلب صلاحية الإشعارات ثم يعرض الواجهة بالثيم المحفوظ. */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
-            }
+            val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        
-        val prefs = getSharedPreferences("smartstudent_prefs", Context.MODE_PRIVATE)
-        
+
+        val prefs = getSharedPreferences(AppConfig.PREFS_NAME, Context.MODE_PRIVATE)
         setContent {
-            var dark by remember { mutableStateOf(prefs.getBoolean("dark", false)) }
+            var dark by remember { mutableStateOf(prefs.getBoolean(AppConfig.KEY_DARK, false)) }
             SmartStudentTheme(darkTheme = dark) {
                 MainScreen(
                     aiEngine = aiEngine,
@@ -461,7 +829,7 @@ class MainActivity : ComponentActivity() {
                     darkTheme = dark,
                     onDarkThemeChange = {
                         dark = it
-                        prefs.edit().putBoolean("dark", it).apply()
+                        prefs.edit().putBoolean(AppConfig.KEY_DARK, it).apply()
                     },
                     prefs = prefs
                 )
@@ -470,15 +838,23 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * الشاشة الرئيسية: شريط علوي متدرج + شريط تنقل سفلي بأربعة أقسام.
+ */
 @Composable
 fun MainScreen(
     aiEngine: GeminiAIEngine,
-    repo: MockCurriculumRepository,
+    repo: CurriculumRepository,
     darkTheme: Boolean,
     onDarkThemeChange: (Boolean) -> Unit,
     prefs: SharedPreferences
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    // حالة الدردشة والامتحان محفوظة هنا حتى لا تضيع عند التنقل بين التبويبات،
+    // والـ scope هنا يضمن أن الطلبات الجارية لا تُلغى عند تغيير التبويب.
+    val appScope = rememberCoroutineScope()
+    val chatState = remember { ChatState() }
+    val examState = remember { ExamState() }
     val tabs = listOf("الرئيسية", "دردشة AI", "الامتحانات", "حسابي")
     val icons = listOf(Icons.Filled.Home, Icons.Filled.Chat, Icons.Filled.Description, Icons.Filled.Person)
 
@@ -487,58 +863,172 @@ fun MainScreen(
         topBar = {
             TopAppBar(
                 title = { Text("الطالب الذكي", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    titleContentColor = Color.White
+                ),
+                modifier = Modifier.background(BrandGradient)
             )
         },
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                tabs.forEachIndexed { index, title ->
+                tabs.forEachIndexed { i, label ->
                     NavigationBarItem(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        icon = { Icon(icons[index], contentDescription = title) },
-                        label = { Text(title) }
+                        selected = selectedTab == i,
+                        onClick = { selectedTab = i },
+                        icon = { Icon(icons[i], contentDescription = label) },
+                        label = { Text(label) }
                     )
                 }
             }
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
-            when (selectedTab) {
-                0 -> HomeTab(prefs)
-                1 -> AIChatTab(aiEngine)
-                2 -> ExamWizardTab(aiEngine, repo)
-                else -> ProfileTab(darkTheme, onDarkThemeChange, prefs)
-            }
+    ) { padding ->
+        when (selectedTab) {
+            0 -> HomeTab(prefs, Modifier.padding(padding))
+            1 -> AIChatTab(aiEngine, chatState, appScope, Modifier.padding(padding))
+            2 -> ExamWizardTab(aiEngine, repo, examState, appScope, Modifier.padding(padding))
+            else -> ProfileTab(darkTheme, onDarkThemeChange, prefs, Modifier.padding(padding))
         }
     }
 }
 
-@Composable
-fun HomeTab(prefs: SharedPreferences) {
-    val ctx = LocalContext.current
-    val tasks = remember { mutableStateListOf<StudyTask>() }
-    var showDialog by remember { mutableStateOf(false) }
-    
-    var title by remember { mutableStateOf("") }
-    var dateMillis by remember { mutableStateOf<Long?>(null) }
-    var timeText by remember { mutableStateOf("") }
-    val calendar = Calendar.getInstance()
+// =========================================================================================
+// 11. دوال المنبه (Alarm Helpers)
+// =========================================================================================
 
-    val datePicker = remember {
-        DatePickerDialog(ctx, { _, y, m, d ->
-            calendar.set(y, m, d)
-            dateMillis = calendar.timeInMillis
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH))
+/** يبني الـ PendingIntent الخاص بمهمة معينة (نفس الدالة تُستخدم للضبط والإلغاء). */
+fun buildAlarmPendingIntent(ctx: Context, task: StudyTask): PendingIntent {
+    val intent = Intent(ctx, AlarmReceiver::class.java).putExtra(AppConfig.EXTRA_TASK_TITLE, task.title)
+    return PendingIntent.getBroadcast(
+        ctx,
+        task.id.hashCode(),
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+}
+
+/** هل يسمح النظام بالمنبهات الدقيقة؟ (دائماً true قبل أندرويد 12). */
+fun canUseExactAlarms(ctx: Context): Boolean {
+    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) am.canScheduleExactAlarms() else true
+}
+
+/**
+ * ضبط المنبه. لو الصلاحية ممنوحة نستخدم setExactAndAllowWhileIdle، وإلا نستخدم
+ * setAndAllowWhileIdle كبديل لتجنب انهيار التطبيق على أندرويد 12+.
+ * ترجع true لو المنبه دقيق، و false لو تقريبي.
+ */
+fun scheduleAlarm(ctx: Context, task: StudyTask): Boolean {
+    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val pending = buildAlarmPendingIntent(ctx, task)
+    if (canUseExactAlarms(ctx)) {
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
+            return true
+        } catch (e: SecurityException) {
+            // لو النظام سحب الصلاحية فجأة نرجع للمنبه التقريبي.
+            e.printStackTrace()
+        }
     }
-    
-    val timePicker = remember {
-        TimePickerDialog(ctx, { _, h, min ->
-            calendar.set(Calendar.HOUR_OF_DAY, h)
-            calendar.set(Calendar.MINUTE, min)
-            dateMillis = calendar.timeInMillis
-            timeText = String.format("%02d:%02d", h, min)
-        }, calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), false)
+    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
+    return false
+}
+
+/** إلغاء منبه مهمة (عند حذفها أو إنهائها). */
+fun cancelAlarm(ctx: Context, task: StudyTask) {
+    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    am.cancel(buildAlarmPendingIntent(ctx, task))
+}
+
+/** تنسيق موعد المهمة للعرض، مثال: 2026/10/27 - 08:30 م. */
+fun formatTaskTime(millis: Long): String {
+    val formatter = SimpleDateFormat("yyyy/MM/dd - hh:mm a", Locale("ar", "EG"))
+    return formatter.format(Date(millis))
+}
+
+// =========================================================================================
+// 12. الشاشة الرئيسية: المهام والمنبهات (Home Tab)
+// =========================================================================================
+@Composable
+fun HomeTab(prefs: SharedPreferences, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    val tasks = remember { mutableStateListOf<StudyTask>().apply { addAll(TaskStore.load(prefs)) } }
+    var showDialog by remember { mutableStateOf(false) }
+    var title by remember { mutableStateOf("") }
+    var pickedDate by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+    var pickedTime by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    /** حفظ القائمة الحالية في الذاكرة الدائمة. */
+    fun persist() = TaskStore.save(prefs, tasks.toList())
+
+    // عند فتح التطبيق نعيد جدولة المنبهات القادمة (مفيد بعد إعادة تشغيل الهاتف).
+    LaunchedEffect(Unit) {
+        val now = System.currentTimeMillis()
+        tasks.filter { !it.done && it.triggerAt > now }.forEach { scheduleAlarm(ctx, it) }
+    }
+
+    /** إعادة ضبط حقول نافذة إضافة المهمة. */
+    fun resetDialogFields() {
+        title = ""
+        pickedDate = null
+        pickedTime = null
+    }
+
+    /** فتح نافذة اختيار التاريخ (لا يمكن اختيار يوم قديم). */
+    fun openDatePicker() {
+        val now = Calendar.getInstance()
+        val dialog = DatePickerDialog(
+            ctx,
+            { _, y, m, d -> pickedDate = Triple(y, m, d) },
+            now.get(Calendar.YEAR),
+            now.get(Calendar.MONTH),
+            now.get(Calendar.DAY_OF_MONTH)
+        )
+        dialog.datePicker.minDate = System.currentTimeMillis() - 1000
+        dialog.show()
+    }
+
+    /** فتح نافذة اختيار الوقت بنظام 12 ساعة (ص/م). */
+    fun openTimePicker() {
+        val now = Calendar.getInstance()
+        TimePickerDialog(
+            ctx,
+            { _, h, min -> pickedTime = Pair(h, min) },
+            now.get(Calendar.HOUR_OF_DAY),
+            now.get(Calendar.MINUTE),
+            false
+        ).show()
+    }
+
+    /** إنشاء المهمة بعد التحقق من البيانات وضبط المنبه. */
+    fun addTask() {
+        val date = pickedDate
+        val time = pickedTime
+        if (title.isBlank() || date == null || time == null) {
+            Toast.makeText(ctx, "أكمل البيانات أولاً (الاسم والتاريخ والوقت)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val cal = Calendar.getInstance()
+        cal.set(date.first, date.second, date.third, time.first, time.second, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        if (cal.timeInMillis <= System.currentTimeMillis()) {
+            Toast.makeText(ctx, "الموعد لازم يكون في المستقبل", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val task = StudyTask(id = System.currentTimeMillis(), title = title.trim(), triggerAt = cal.timeInMillis)
+        tasks.add(task)
+        tasks.sortBy { it.triggerAt }
+        persist()
+        val exact = scheduleAlarm(ctx, task)
+        if (!exact) {
+            Toast.makeText(
+                ctx,
+                "تم ضبط منبه تقريبي. فعّل المنبهات الدقيقة من تبويب حسابي لدقة أعلى.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        showDialog = false
+        resetDialogFields()
     }
 
     if (showDialog) {
@@ -547,366 +1037,1131 @@ fun HomeTab(prefs: SharedPreferences) {
             title = { Text("مهمة جديدة") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("اسم المهمة") })
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("اسم المهمة (مثال: درس الفيزياء)") },
+                        singleLine = true
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { datePicker.show() }) { Text(if (dateMillis != null) "التاريخ: تم" else "التاريخ") }
-                        OutlinedButton(onClick = { timePicker.show() }) { Text(if (timeText.isNotBlank()) "الوقت: $timeText" else "الوقت") }
+                        OutlinedButton(onClick = { openDatePicker() }) {
+                            val d = pickedDate
+                            Text(
+                                if (d != null) {
+                                    String.format(Locale.US, "%04d/%02d/%02d", d.first, d.second + 1, d.third)
+                                } else {
+                                    "التاريخ"
+                                }
+                            )
+                        }
+                        OutlinedButton(onClick = { openTimePicker() }) {
+                            val t = pickedTime
+                            Text(
+                                if (t != null) {
+                                    val hour12 = if (t.first % 12 == 0) 12 else t.first % 12
+                                    val suffix = if (t.first < 12) "ص" else "م"
+                                    String.format(Locale.US, "%02d:%02d %s", hour12, t.second, suffix)
+                                } else {
+                                    "الوقت"
+                                }
+                            )
+                        }
                     }
                 }
             },
-            confirmButton = {
+            confirmButton = { TextButton(onClick = { addTask() }) { Text("إضافة") } },
+            dismissButton = {
                 TextButton(onClick = {
-                    if (title.isNotBlank() && dateMillis != null) {
-                        val t = StudyTask(System.currentTimeMillis(), title, "يوم $timeText", dateMillis!!)
-                        tasks.add(t)
-                        setAlarm(ctx, t)
-                        showDialog = false
-                    } else {
-                        Toast.makeText(ctx, "أكمل البيانات أولاً", Toast.LENGTH_SHORT).show()
-                    }
-                }) { Text("إضافة") }
+                    showDialog = false
+                    resetDialogFields()
+                }) { Text("إلغاء") }
             }
         )
     }
 
     Scaffold(
-        floatingActionButton = { FloatingActionButton(onClick = { showDialog = true }) { Icon(Icons.Filled.Add, null) } },
-        containerColor = Color.Transparent
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            Text("أهلاً بك 👋", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
-            
-            Card(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))) {
-                Column(Modifier.background(BrandGradient).padding(20.dp)) {
-                    Text("مساعدك الذكي", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                    Text("ذاكر بذكاء ووفر وقتك.", color = Color.White.copy(alpha = 0.9f))
-                }
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showDialog = true }) {
+                Icon(Icons.Filled.Add, contentDescription = "مهمة جديدة")
             }
-            
+        },
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp)
+    ) { innerPadding ->
+        Column(modifier.fillMaxSize().padding(innerPadding).padding(16.dp)) {
+            Text(
+                "أهلاً بك 👋",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
             Spacer(Modifier.height(16.dp))
-            Text("مهامك القادمة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            
+            val doneCount = tasks.count { it.done }
+            GradientCard(
+                title = "مساعدك الذكي",
+                subtitle = if (tasks.isEmpty()) {
+                    "ذاكر بذكاء ووفر وقتك. أضف أول موعد مذاكرة بزر +"
+                } else {
+                    "أنجزت $doneCount من ${tasks.size} مهمة"
+                }
+            )
+            Spacer(Modifier.height(16.dp))
+            SectionTitle("مهامك القادمة")
+            Spacer(Modifier.height(8.dp))
+
+            if (tasks.isEmpty()) {
+                Text("لا توجد مهام بعد.", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+            }
+
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(tasks, key = { it.id }) { task ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = task.done, onCheckedChange = { checked ->
-                                val index = tasks.indexOfFirst { it.id == task.id }
-                                if (index >= 0) tasks[index] = task.copy(done = checked)
-                            })
-                            Column(Modifier.weight(1f)) {
-                                Text(task.title, fontWeight = FontWeight.Bold, textDecoration = if (task.done) TextDecoration.LineThrough else null)
-                                Text(task.timeStr, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    TaskCard(
+                        task = task,
+                        onToggle = { checked ->
+                            val idx = tasks.indexOfFirst { it.id == task.id }
+                            if (idx >= 0) {
+                                val updated = task.copy(done = checked)
+                                tasks[idx] = updated
+                                persist()
+                                if (checked) {
+                                    cancelAlarm(ctx, updated)
+                                } else if (updated.triggerAt > System.currentTimeMillis()) {
+                                    scheduleAlarm(ctx, updated)
+                                }
                             }
-                            IconButton(onClick = { tasks.remove(task) }) { Icon(Icons.Filled.Delete, null, tint = Color.Red) }
+                        },
+                        onDelete = {
+                            cancelAlarm(ctx, task)
+                            tasks.remove(task)
+                            persist()
                         }
-                    }
+                    )
                 }
             }
         }
     }
 }
 
-fun setAlarm(ctx: Context, task: StudyTask) {
-    val intent = Intent(ctx, AlarmReceiver::class.java).putExtra("title", task.title)
-    val pending = PendingIntent.getBroadcast(ctx, task.id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
-        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
-    } else {
-        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, task.triggerAt, pending)
+/** بطاقة مهمة واحدة: خانة إنجاز + العنوان + الموعد + زر حذف. */
+@Composable
+fun TaskCard(task: StudyTask, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = task.done, onCheckedChange = onToggle)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    task.title,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textDecoration = if (task.done) TextDecoration.LineThrough else null
+                )
+                Text(
+                    formatTaskTime(task.triggerAt),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Filled.Delete, contentDescription = "حذف", tint = Color(0xFFE53935))
+            }
+        }
     }
 }
 
+
+// =========================================================================================
+// 13. حاملات الحالة (State Holders)
+// تُنشأ مرة واحدة في MainScreen حتى لا تضيع المحادثة أو تقدّم الامتحان عند تغيير التبويب.
+// =========================================================================================
+
+/** حالة شاشة الدردشة. */
+class ChatState {
+    /** كل رسائل المحادثة. */
+    var messages by mutableStateOf<List<ChatMessage>>(emptyList())
+
+    /** هل ننتظر رد الذكاء الاصطناعي الآن؟ */
+    var loading by mutableStateOf(false)
+}
+
+/** حالة معالج الامتحان بكل خطواته. */
+class ExamState {
+    /** الخطوة الحالية: 0 صف، 1 نظام، 2 شعبة، 3 مادة، 4 اختيار الدروس، 5 الاختبار، 6 النتيجة. */
+    var step by mutableIntStateOf(0)
+    var grade by mutableStateOf("")
+    var system by mutableStateOf("")
+    var stream by mutableStateOf("")
+    var subject by mutableStateOf("")
+
+    /** الأبواب والدروس القادمة من الذكاء الاصطناعي. */
+    var chapters by mutableStateOf<List<Chapter>>(emptyList())
+
+    /** أرقام الدروس المحددة. */
+    var selectedIds by mutableStateOf<Set<Long>>(emptySet())
+
+    var curriculumLoading by mutableStateOf(false)
+    var examLoading by mutableStateOf(false)
+    var errorMsg by mutableStateOf("")
+
+    var questions by mutableStateOf<List<QuizQuestion>>(emptyList())
+    var qIndex by mutableIntStateOf(0)
+    var selectedAnswer by mutableStateOf<Int?>(null)
+    var score by mutableIntStateOf(0)
+
+    /** عدّاد لإبطال الردود القديمة: كل طلب جديد أو رجوع يزيده، فيتجاهل أي رد متأخر لطلب سابق. */
+    var requestToken = 0
+
+    /** الرجوع للبداية بعد تصفير كل شيء. */
+    fun resetAll() {
+        step = 0
+        grade = ""
+        system = ""
+        stream = ""
+        subject = ""
+        chapters = emptyList()
+        selectedIds = emptySet()
+        curriculumLoading = false
+        examLoading = false
+        errorMsg = ""
+        questions = emptyList()
+        qIndex = 0
+        selectedAnswer = null
+        score = 0
+    }
+}
+
+// =========================================================================================
+// 14. أدوات الصور (Image Helpers)
+// =========================================================================================
+
+/**
+ * يحمّل صورة من الـ Uri ويصغّرها (أقصى ضلع 1024 بكسل) لتفادي OutOfMemory
+ * وتقليل حجم الإرسال. ترجع null لو حصل خطأ.
+ */
+fun loadScaledBitmap(ctx: Context, uri: Uri, maxSide: Int = 1024): Bitmap? {
+    return try {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+
+        var sample = 1
+        while (bounds.outWidth / sample > maxSide * 2 || bounds.outHeight / sample > maxSide * 2) {
+            sample *= 2
+        }
+        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sample }
+        val decoded = ctx.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, decodeOptions)
+        } ?: return null
+
+        val largest = maxOf(decoded.width, decoded.height)
+        if (largest > maxSide) {
+            val scale = maxSide.toFloat() / largest
+            Bitmap.createScaledBitmap(
+                decoded,
+                (decoded.width * scale).toInt(),
+                (decoded.height * scale).toInt(),
+                true
+            )
+        } else {
+            decoded
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/** يحوّل الصورة إلى Base64 بصيغة JPEG لإرسالها إلى الموديل. */
+fun bitmapToBase64(bitmap: Bitmap): String {
+    val out = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+    return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+}
+
+// =========================================================================================
+// 15. شاشة الدردشة (AI Chat Tab)
+// - فقاعات رسائل حديثة.
+// - إرسال نص، أو صورة من المعرض (Base64).
+// - إدخال صوتي بـ SpeechRecognizer مع طلب صلاحية RECORD_AUDIO.
+// - تمرير تلقائي لأسفل عند وصول رسالة جديدة.
+// =========================================================================================
+
+/** فقاعة رسالة واحدة (لون مختلف للمستخدم والذكاء الاصطناعي والخطأ). */
 @Composable
-fun AIChatTab(aiEngine: GeminiAIEngine) {
+fun ChatBubble(msg: ChatMessage) {
+    val scheme = MaterialTheme.colorScheme
+    val background = when {
+        msg.isError -> scheme.errorContainer
+        msg.isUser -> scheme.primary
+        else -> scheme.surface
+    }
+    val foreground = when {
+        msg.isError -> scheme.onErrorContainer
+        msg.isUser -> scheme.onPrimary
+        else -> scheme.onSurface
+    }
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = if (msg.isUser) Arrangement.Start else Arrangement.End
+    ) {
+        Card(
+            modifier = Modifier.widthIn(max = 300.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = background)
+        ) {
+            Column(Modifier.padding(12.dp)) {
+                msg.imageBitmap?.let { bmp ->
+                    FoundationImage(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = "الصورة المرفقة",
+                        modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                Text(msg.text, color = foreground)
+            }
+        }
+    }
+}
+
+/** تحويل رمز خطأ SpeechRecognizer إلى رسالة مفهومة للمستخدم. */
+fun speechErrorMessage(code: Int): String = when (code) {
+    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "الإدخال الصوتي يحتاج اتصال إنترنت"
+    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "صلاحية الميكروفون غير ممنوحة"
+    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "خدمة التعرف على الصوت مشغولة، حاول بعد لحظات"
+    else -> "تعذّر التعرف على الصوت (رمز $code)"
+}
+
+/**
+ * شاشة الدردشة الكاملة: قائمة الرسائل + شريط الإدخال (صورة / نص / صوت / إرسال).
+ * الحالة (الرسائل والتحميل) محفوظة في ChatState حتى لا تضيع عند تغيير التبويب.
+ */
+@Composable
+fun AIChatTab(
+    aiEngine: GeminiAIEngine,
+    state: ChatState,
+    scope: CoroutineScope,
+    modifier: Modifier = Modifier
+) {
     val ctx = LocalContext.current
+    val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
-    var messages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
     var imgB64 by remember { mutableStateOf<String?>(null) }
     var imgBmp by remember { mutableStateOf<Bitmap?>(null) }
-    val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
+    var listening by remember { mutableStateOf(false) }
 
-    val speechLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
-        if (res.resultCode == ComponentActivity.RESULT_OK) {
-            input = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: ""
-        }
-    }
-    
-    val imgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let {
-            val bmp = BitmapFactory.decodeStream(ctx.contentResolver.openInputStream(it))
-            imgBmp = bmp
-            val out = ByteArrayOutputStream()
-            bmp.compress(Bitmap.CompressFormat.JPEG, 70, out)
-            imgB64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    // ---------------- الإدخال الصوتي ----------------
+    val speechAvailable = remember { SpeechRecognizer.isRecognitionAvailable(ctx) }
+    val recognizer = remember { if (speechAvailable) SpeechRecognizer.createSpeechRecognizer(ctx) else null }
+    val speechIntent = remember {
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-EG")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         }
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    // ربط المستمع بالـ recognizer، وتنظيفه عند مغادرة الشاشة.
+    DisposableEffect(recognizer) {
+        recognizer?.setRecognitionListener(object : RecognitionListener {
+            // دوال لا نحتاجها لكنها إجبارية في الواجهة:
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+
+            // انتهى المستخدم من الكلام.
+            override fun onEndOfSpeech() {
+                listening = false
+            }
+
+            // حصل خطأ في التعرف على الصوت: نوقف حالة الاستماع ونعرض رسالة مناسبة.
+            override fun onError(error: Int) {
+                listening = false
+                if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                    Toast.makeText(ctx, speechErrorMessage(error), Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            // النتيجة النهائية: نضعها في خانة الإدخال.
+            override fun onResults(results: Bundle?) {
+                listening = false
+                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!text.isNullOrBlank()) input = text
+            }
+
+            // نتائج جزئية أثناء الكلام لتظهر الكلمات فوراً.
+            override fun onPartialResults(partialResults: Bundle?) {
+                val text = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!text.isNullOrBlank()) input = text
+            }
+
+            // أحداث إضافية غير مستخدمة.
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        onDispose {
+            recognizer?.cancel()
+            recognizer?.destroy()
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(messages) { msg ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = if (msg.isUser) Arrangement.End else Arrangement.Start) {
-                    Card(colors = CardDefaults.cardColors(containerColor = if (msg.isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)) {
-                        Column(Modifier.padding(12.dp)) {
-                            msg.imageBitmap?.let {
-                                Image(bitmap = it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(100.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
-                            }
-                            Text(msg.text, color = if (msg.isUser) Color.White else Color.Black)
-                        }
+    // بديل لو الجهاز ما فيهوش خدمة SpeechRecognizer: نفتح شاشة التعرف الجاهزة من النظام.
+    val speechFallbackLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        if (res.resultCode == Activity.RESULT_OK) {
+            val text = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+            if (!text.isNullOrBlank()) input = text
+        }
+    }
+
+    // طلب صلاحية الميكروفون ثم بدء الاستماع لو تم السماح.
+    val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            listening = true
+            recognizer?.startListening(speechIntent)
+        } else {
+            Toast.makeText(ctx, "لازم تسمح بصلاحية الميكروفون عشان الإدخال الصوتي", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** زر الميكروفون: يبدأ الاستماع أو يوقفه. */
+    fun toggleMic() {
+        if (recognizer == null) {
+            try {
+                speechFallbackLauncher.launch(
+                    Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-EG")
+                )
+            } catch (e: Exception) {
+                Toast.makeText(ctx, "الإدخال الصوتي غير مدعوم على جهازك", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        if (listening) {
+            recognizer.stopListening()
+            listening = false
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            listening = true
+            recognizer.startListening(speechIntent)
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    // ---------------- اختيار صورة من المعرض ----------------
+    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val bmp = withContext(Dispatchers.IO) { loadScaledBitmap(ctx, uri) }
+                if (bmp != null) {
+                    val b64 = withContext(Dispatchers.IO) { bitmapToBase64(bmp) }
+                    imgBmp = bmp
+                    imgB64 = b64
+                } else {
+                    Toast.makeText(ctx, "تعذّر تحميل الصورة", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /** إرسال الرسالة (نص و/أو صورة) واستقبال رد الذكاء الاصطناعي. */
+    fun sendMessage() {
+        if ((input.isBlank() && imgB64 == null) || state.loading) return
+        if (listening) {
+            recognizer?.stopListening()
+            listening = false
+        }
+        val question = if (input.isBlank()) "حلل الصورة وساعدني في حلها" else input.trim()
+        val updated = state.messages + ChatMessage(text = question, isUser = true, imageBitmap = imgBmp)
+        state.messages = updated
+        val imageToSend = imgB64
+        input = ""
+        imgBmp = null
+        imgB64 = null
+        state.loading = true
+        scope.launch {
+            val res = aiEngine.chat(updated, imageToSend)
+            state.messages = state.messages + ChatMessage(text = res.text, isUser = false, isError = res.isError)
+            state.loading = false
+        }
+    }
+
+    // تمرير تلقائي لآخر رسالة (أو لمؤشر التحميل) عند أي تغيير.
+    LaunchedEffect(state.messages.size, state.loading) {
+        val count = state.messages.size + if (state.loading) 1 else 0
+        if (count > 0) listState.animateScrollToItem(count - 1)
+    }
+
+    // ---------------- واجهة الشاشة ----------------
+    Column(modifier.fillMaxSize().imePadding().padding(16.dp)) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (state.messages.isEmpty()) {
+                item {
+                    GradientCard(
+                        title = "اسألني في أي مادة",
+                        subtitle = "اكتب سؤالك، أو صوّره، أو قوله بصوتك وأنا هساعدك."
+                    )
+                }
+            }
+            items(state.messages, key = { it.id }) { msg -> ChatBubble(msg) }
+            if (state.loading) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("جاري التفكير...", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
                     }
                 }
             }
-            if (loading) {
-                item { CircularProgressIndicator(Modifier.size(24.dp)) }
-            }
         }
-        
-        if (imgBmp != null) {
-            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Image(bitmap = imgBmp!!.asImageBitmap(), contentDescription = "Preview", modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)))
+
+        // معاينة الصورة المختارة قبل الإرسال.
+        val previewBitmap = imgBmp
+        if (previewBitmap != null) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FoundationImage(
+                    bitmap = previewBitmap.asImageBitmap(),
+                    contentDescription = "معاينة الصورة",
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop
+                )
                 Spacer(Modifier.width(8.dp))
-                IconButton(onClick = { imgBmp = null; imgB64 = null }) { Icon(Icons.Filled.Close, "إلغاء", tint = Color.Red) }
+                IconButton(onClick = {
+                    imgBmp = null
+                    imgB64 = null
+                }) { Icon(Icons.Filled.Close, contentDescription = "إلغاء الصورة", tint = Color(0xFFE53935)) }
             }
         }
-        
+
+        // شريط الإدخال: صورة / نص / ميكروفون / إرسال.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { imgLauncher.launch("image/*") }) { Icon(Icons.Filled.Image, "صورة", tint = MaterialTheme.colorScheme.primary) }
-            OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f), placeholder = { Text("اكتب...") }, shape = RoundedCornerShape(24.dp))
-            IconButton(onClick = { speechLauncher.launch(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-EG")) }) { Icon(Icons.Filled.Mic, "تسجيل", tint = MaterialTheme.colorScheme.secondary) }
-            IconButton(onClick = {
-                if ((input.isNotBlank() || imgB64 != null) && !loading) {
-                    val q = if (input.isBlank()) "حلل الصورة" else input
-                    messages = messages + ChatMessage(text = q, isUser = true, imageBitmap = imgBmp)
-                    val base64ToSend = imgB64
-                    input = ""; imgBmp = null; imgB64 = null; loading = true
-                    scope.launch {
-                        val res = safeAi { aiEngine.chat(messages, base64ToSend) }
-                        messages = messages + ChatMessage(text = res.text(), isUser = false, isError = res.isError)
-                        loading = false
-                    }
-                }
-            }) { Icon(Icons.Filled.Send, "إرسال") }
+            IconButton(onClick = { imageLauncher.launch("image/*") }) {
+                Icon(Icons.Filled.Image, contentDescription = "صورة", tint = MaterialTheme.colorScheme.primary)
+            }
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(if (listening) "جاري الاستماع..." else "اكتب سؤالك...") },
+                shape = RoundedCornerShape(24.dp),
+                maxLines = 4
+            )
+            IconButton(onClick = { toggleMic() }) {
+                Icon(
+                    if (listening) Icons.Filled.Stop else Icons.Filled.Mic,
+                    contentDescription = "تسجيل صوتي",
+                    tint = if (listening) Color(0xFFE53935) else MaterialTheme.colorScheme.secondary
+                )
+            }
+            IconButton(onClick = { sendMessage() }, enabled = !state.loading) {
+                Icon(Icons.Filled.Send, contentDescription = "إرسال", tint = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }
 
-@Composable
-fun ExamWizardTab(aiEngine: GeminiAIEngine, repo: MockCurriculumRepository) {
-    val scope = rememberCoroutineScope()
-    var step by remember { mutableIntStateOf(0) }
-    var grade by remember { mutableStateOf("") }
-    var system by remember { mutableStateOf("") }
-    var stream by remember { mutableStateOf("") }
-    var subject by remember { mutableStateOf("") }
-    var chapters by remember { mutableStateOf<List<Chapter>>(emptyList()) }
-    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMsg by remember { mutableStateOf("") }
-    var questions by remember { mutableStateOf<List<QuizQuestion>>(emptyList()) }
-    var qIndex by remember { mutableIntStateOf(0) }
-    var selectedAnswer by remember { mutableStateOf<Int?>(null) }
-    var score by remember { mutableIntStateOf(0) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (errorMsg.isNotBlank()) {
-            Text(errorMsg, color = Color.Red)
-            TextButton(onClick = { errorMsg = "" }) { Text("إغلاق") }
+// =========================================================================================
+// 16. منطق معالج الامتحان (Exam Wizard Logic)
+// =========================================================================================
+
+/**
+ * يجلب أبواب ودروس المادة الحالية من Gemini (JSON ثم Parser).
+ * نستخدم requestToken لتجاهل أي رد قديم لو المستخدم رجع أو غيّر المادة أثناء الانتظار.
+ */
+fun loadCurriculum(state: ExamState, repo: CurriculumRepository, scope: CoroutineScope) {
+    state.requestToken += 1
+    val token = state.requestToken
+    state.curriculumLoading = true
+    state.errorMsg = ""
+    state.chapters = emptyList()
+    state.selectedIds = emptySet()
+    scope.launch {
+        val result = repo.getChapters(state.grade, state.system, state.stream, state.subject)
+        if (token == state.requestToken) {
+            when (result) {
+                is CurriculumResult.Success -> state.chapters = result.chapters
+                is CurriculumResult.Failure -> state.errorMsg = result.message
+            }
+            state.curriculumLoading = false
         }
-        
-        when (step) {
-            0 -> {
-                Text("اختر الصف الدراسي", style = MaterialTheme.typography.headlineSmall)
-                listOf("الأول الثانوي", "الثاني الثانوي", "الثالث الثانوي").forEach { g ->
-                    Card(Modifier.fillMaxWidth().clickable { grade = g; step = 1 }) { Text(g, Modifier.padding(16.dp)) }
+    }
+}
+
+/** يولّد امتحان الـ 5 أسئلة من الدروس المحددة، وينتقل لشاشة الاختبار عند النجاح. */
+fun generateExam(state: ExamState, aiEngine: GeminiAIEngine, scope: CoroutineScope) {
+    val topics = state.chapters
+        .flatMap { it.lessons }
+        .filter { state.selectedIds.contains(it.id) }
+        .joinToString("، ") { it.title }
+    if (topics.isBlank()) return
+
+    state.requestToken += 1
+    val token = state.requestToken
+    state.examLoading = true
+    state.errorMsg = ""
+    scope.launch {
+        val response = aiEngine.generateInteractiveExam(state.grade, state.system, state.stream, state.subject, topics)
+        if (token == state.requestToken) {
+            if (response.isError) {
+                state.errorMsg = response.text
+            } else {
+                val parsed = parseQuiz(response.text)
+                if (parsed.isNotEmpty()) {
+                    state.questions = parsed
+                    state.qIndex = 0
+                    state.score = 0
+                    state.selectedAnswer = null
+                    state.step = 5
+                } else {
+                    state.errorMsg = "رد الذكاء الاصطناعي غير مفهوم. جرّب تاني."
                 }
             }
-            1 -> {
-                Text("اختر النظام", style = MaterialTheme.typography.headlineSmall)
-                listOf("عام", "لغات", "أزهر").forEach { s ->
-                    Card(Modifier.fillMaxWidth().clickable { system = s; step = 2 }) { Text(s, Modifier.padding(16.dp)) }
+            state.examLoading = false
+        }
+    }
+}
+
+/** زر/إيماءة الرجوع: يرجع خطوة واحدة ويلغي أي طلب جارٍ. */
+fun examGoBack(state: ExamState) {
+    state.requestToken += 1
+    state.curriculumLoading = false
+    state.examLoading = false
+    state.errorMsg = ""
+    state.step = when (state.step) {
+        5, 6 -> 4
+        in 1..4 -> state.step - 1
+        else -> 0
+    }
+}
+
+// =========================================================================================
+// 17. شاشة الامتحانات (Exam Wizard Tab)
+// الخطوات: الصف ← النظام ← الشعبة ← المادة ← (جلب المنهج من الـ AI) ← اختيار الدروس ← الاختبار ← النتيجة
+// =========================================================================================
+
+/** رأس الخطوة: زر رجوع (لو متاح) + العنوان. */
+@Composable
+fun WizardHeader(title: String, showBack: Boolean, onBack: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (showBack) {
+            // في الاتجاه RTL سهم "الرجوع" يشير لليمين، لذلك نستخدم ArrowForward.
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.Filled.ArrowForward,
+                    contentDescription = "رجوع",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+    }
+}
+
+/** خطوة اختيار بسيطة: عنوان + قائمة بطاقات. */
+@Composable
+fun WizardOptionStep(
+    title: String,
+    options: List<String>,
+    showBack: Boolean,
+    onBack: () -> Unit,
+    onPick: (String) -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        WizardHeader(title, showBack, onBack)
+        options.forEach { option -> OptionCard(option) { onPick(option) } }
+    }
+}
+
+/** بطاقة باب: خانة لتحديد الباب كله + زر لفرد دروسه وتحديد درس معين. */
+@Composable
+fun ChapterCard(chapter: Chapter, selectedIds: Set<Long>, onSelectionChange: (Set<Long>) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val chapterLessonIds = chapter.lessons.map { it.id }.toSet()
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column {
+            Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = selectedIds.containsAll(chapterLessonIds),
+                    onCheckedChange = { checked ->
+                        onSelectionChange(if (checked) selectedIds + chapterLessonIds else selectedIds - chapterLessonIds)
+                    }
+                )
+                Text(
+                    chapter.title,
+                    Modifier.weight(1f),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "عرض الدروس"
+                    )
                 }
             }
-            2 -> {
-                Text("اختر الشعبة", style = MaterialTheme.typography.headlineSmall)
-                listOf("علمي علوم", "علمي رياضة", "أدبي").forEach { st ->
-                    Card(Modifier.fillMaxWidth().clickable { stream = st; step = 3 }) { Text(st, Modifier.padding(16.dp)) }
-                }
-            }
-            3 -> {
-                Text("اختر المادة", style = MaterialTheme.typography.headlineSmall)
-                listOf("فيزياء", "كيمياء", "أحياء", "رياضيات", "لغة عربية", "لغة إنجليزية").forEach { sub ->
-                    Card(Modifier.fillMaxWidth().clickable {
-                        subject = sub
-                        scope.launch {
-                            isLoading = true
-                            chapters = repo.getChapters(sub)
-                            isLoading = false
-                            step = 4
+            AnimatedVisibility(visible = expanded) {
+                Column(Modifier.padding(start = 24.dp, bottom = 8.dp)) {
+                    chapter.lessons.forEach { lesson ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = selectedIds.contains(lesson.id),
+                                onCheckedChange = { checked ->
+                                    onSelectionChange(if (checked) selectedIds + lesson.id else selectedIds - lesson.id)
+                                }
+                            )
+                            Text(lesson.title, color = MaterialTheme.colorScheme.onSurface)
                         }
-                    }) { Text(sub, Modifier.padding(16.dp)) }
+                    }
                 }
-                if (isLoading) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
             }
-            4 -> {
-                Text("اختر الدروس", style = MaterialTheme.typography.headlineSmall)
-                Button(onClick = { selectedIds = chapters.flatMap { it.lessons }.map { it.id }.toSet() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("تحديد المنهج كله")
+        }
+    }
+}
+
+/** خطوة اختيار الدروس (درس معين / باب كامل / المنهج كله) مع حالات التحميل والخطأ. */
+@Composable
+fun LessonPickerStep(
+    state: ExamState,
+    repo: CurriculumRepository,
+    aiEngine: GeminiAIEngine,
+    scope: CoroutineScope
+) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        WizardHeader("اختر الدروس", true) { examGoBack(state) }
+        Text(
+            "مادة ${state.subject} - ${state.grade}",
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+        )
+
+        when {
+            // 1) جاري جلب المنهج من الذكاء الاصطناعي
+            state.curriculumLoading -> {
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 48.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Text(
+                        "جاري جلب أبواب ودروس المنهج...",
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
                 }
+            }
+
+            // 2) فشل الجلب: نعرض الرسالة وزر إعادة المحاولة
+            state.chapters.isEmpty() -> {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            state.errorMsg.ifBlank { "لم يتم العثور على دروس." },
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Button(onClick = { loadCurriculum(state, repo, scope) }) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("إعادة المحاولة")
+                        }
+                    }
+                }
+            }
+
+            // 3) المنهج جاهز: قائمة الأبواب والدروس
+            else -> {
+                if (state.errorMsg.isNotBlank()) {
+                    Text(state.errorMsg, color = MaterialTheme.colorScheme.error)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        state.selectedIds = state.chapters.flatMap { it.lessons }.map { it.id }.toSet()
+                    }) { Text("المنهج كله") }
+                    OutlinedButton(onClick = { state.selectedIds = emptySet() }) { Text("مسح التحديد") }
+                }
+                Text(
+                    "تم اختيار ${state.selectedIds.size} درس. حدّد باباً كاملاً أو افرده لاختيار درس معين.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                )
                 LazyColumn(Modifier.weight(1f)) {
-                    items(chapters) { ch ->
-                        var expanded by remember { mutableStateOf(false) }
-                        val chIds = ch.lessons.map { it.id }.toSet()
-                        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Column {
-                                Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(checked = selectedIds.containsAll(chIds), onCheckedChange = { c ->
-                                        selectedIds = if (c) selectedIds + chIds else selectedIds - chIds
-                                    })
-                                    Text(ch.title, Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                                    IconButton(onClick = { expanded = !expanded }) { Icon(if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, null) }
-                                }
-                                if (expanded) {
-                                    ch.lessons.forEach { l ->
-                                        Row(Modifier.padding(start = 32.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            Checkbox(checked = selectedIds.contains(l.id), onCheckedChange = { c ->
-                                                selectedIds = if (c) selectedIds + l.id else selectedIds - l.id
-                                            })
-                                            Text(l.title)
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    items(state.chapters, key = { it.id }) { chapter ->
+                        ChapterCard(chapter, state.selectedIds) { newSelection -> state.selectedIds = newSelection }
                     }
                 }
-                Button(onClick = {
-                    isLoading = true
-                    errorMsg = ""
-                    val topics = chapters.flatMap { it.lessons }.filter { selectedIds.contains(it.id) }.joinToString(", ") { it.title }
-                    scope.launch {
-                        val r = aiEngine.generateInteractiveExam(grade, system, stream, subject, topics)
-                        if (!r.isError) {
-                            questions = parseQuiz(r.text())
-                            if (questions.isNotEmpty()) {
-                                step = 5; qIndex = 0; score = 0
-                            } else {
-                                errorMsg = "الرد غير مفهوم. جرب تاني."
-                            }
-                        } else {
-                            errorMsg = r.text()
-                        }
-                        isLoading = false
-                    }
-                }, enabled = selectedIds.isNotEmpty() && !isLoading, modifier = Modifier.fillMaxWidth()) {
-                    if (isLoading) CircularProgressIndicator(Modifier.size(24.dp)) else Text("توليد الامتحان")
-                }
-            }
-            5 -> {
-                if (questions.isNotEmpty() && qIndex < questions.size) {
-                    val q = questions[qIndex]
-                    LinearProgressIndicator(progress = { (qIndex + 1f) / questions.size }, modifier = Modifier.fillMaxWidth())
-                    Text(q.text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 8.dp))
-                    q.options.forEachIndexed { i, opt ->
-                        val color = when {
-                            selectedAnswer == null -> MaterialTheme.colorScheme.surface
-                            i == q.correctIdx -> Color(0xFFD1FAE5)
-                            i == selectedAnswer -> Color(0xFFFEE2E2)
-                            else -> MaterialTheme.colorScheme.surface
-                        }
-                        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(enabled = selectedAnswer == null) { selectedAnswer = i }, colors = CardDefaults.cardColors(containerColor = color)) {
-                            Text(opt, Modifier.padding(16.dp))
-                        }
-                    }
-                    if (selectedAnswer != null) {
-                        Text(text = "الشرح: " + q.explanation, modifier = Modifier.padding(8.dp), color = Color.Gray)
-                        Button(onClick = {
-                            if (selectedAnswer == q.correctIdx) {
-                                score++
-                            }
-                            if (qIndex + 1 < questions.size) {
-                                qIndex++; selectedAnswer = null
-                            } else {
-                                step = 6
-                            }
-                        }, modifier = Modifier.fillMaxWidth()) { Text("التالي") }
+                Button(
+                    onClick = { generateExam(state, aiEngine, scope) },
+                    enabled = state.selectedIds.isNotEmpty() && !state.examLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (state.examLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("توليد الامتحان (5 أسئلة)")
                     }
                 }
-            }
-            6 -> {
-                Text("النتيجة: $score / ${questions.size}", style = MaterialTheme.typography.headlineMedium)
-                Button(onClick = { step = 0 }) { Text("اختبار جديد") }
             }
         }
     }
 }
 
-fun parseQuiz(text: String): List<QuizQuestion> {
-    val list = mutableListOf<QuizQuestion>()
-    val cleanText = text.replace("```json", "").replace("```", "").trim()
-    val blocks = cleanText.split("Q:").drop(1)
-    for (block in blocks) {
-        val lines = block.lines().filter { it.isNotBlank() }
-        if (lines.isEmpty()) continue
-        val qText = lines[0].trim()
-        val opts = mutableListOf<String>()
-        var correct = -1
-        var exp = ""
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (trimmed.startsWith("O1:")) opts.add(trimmed.removePrefix("O1:").trim())
-            if (trimmed.startsWith("O2:")) opts.add(trimmed.removePrefix("O2:").trim())
-            if (trimmed.startsWith("O3:")) opts.add(trimmed.removePrefix("O3:").trim())
-            if (trimmed.startsWith("O4:")) opts.add(trimmed.removePrefix("O4:").trim())
-            if (trimmed.startsWith("C:")) correct = (trimmed.removePrefix("C:").trim().toIntOrNull() ?: 1) - 1
-            if (trimmed.startsWith("E:")) exp = trimmed.removePrefix("E:").trim()
-        }
-        if (opts.size == 4 && correct >= 0 && correct <= 3) {
-            list.add(QuizQuestion(qText, opts, correct, exp))
-        }
-    }
-    return list
-}
-
+/** شاشة الاختبار: سؤال واحد، الصحيح أخضر والخطأ أحمر، ثم مربع الشرح وزر التالي. */
 @Composable
-fun ProfileTab(dark: Boolean, onDark: (Boolean) -> Unit, prefs: SharedPreferences) {
-    val ctx = LocalContext.current
-    var ringtone by remember { mutableStateOf(prefs.getString("ringtone", "افتراضية")) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
-        if (res.resultCode == ComponentActivity.RESULT_OK) {
-            prefs.edit().putString("ringtone", res.data?.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)?.toString()).apply()
-            ringtone = "تم التغيير"
+fun QuizStep(state: ExamState) {
+    val question = state.questions.getOrNull(state.qIndex) ?: return
+    val answered = state.selectedAnswer != null
+    val isLast = state.qIndex + 1 >= state.questions.size
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            "سؤال ${state.qIndex + 1} من ${state.questions.size}",
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+        )
+        LinearProgressIndicator(
+            progress = { (state.qIndex + 1f) / state.questions.size },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            question.text,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+
+        question.options.forEachIndexed { index, option ->
+            val isCorrect = index == question.correctIdx
+            val isWrongChoice = answered && index == state.selectedAnswer && !isCorrect
+            val background = when {
+                answered && isCorrect -> Color(0xFFD1FAE5)
+                isWrongChoice -> Color(0xFFFEE2E2)
+                else -> MaterialTheme.colorScheme.surface
+            }
+            // نحدد لون النص صراحة حتى يظهر بوضوح فوق الأخضر/الأحمر الفاتح في الوضع الليلي.
+            val foreground = when {
+                answered && isCorrect -> Color(0xFF065F46)
+                isWrongChoice -> Color(0xFF991B1B)
+                else -> MaterialTheme.colorScheme.onSurface
+            }
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .clickable(enabled = !answered) {
+                        state.selectedAnswer = index
+                        if (isCorrect) state.score += 1
+                    },
+                colors = CardDefaults.cardColors(containerColor = background)
+            ) {
+                Text(option, Modifier.padding(16.dp), color = foreground)
+            }
+        }
+
+        AnimatedVisibility(visible = answered) {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Text(
+                    "الشرح: " + question.explanation,
+                    modifier = Modifier.padding(12.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+            }
+        }
+
+        if (answered) {
+            Button(
+                onClick = {
+                    if (isLast) {
+                        state.step = 6
+                    } else {
+                        state.qIndex += 1
+                        state.selectedAnswer = null
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (isLast) "عرض النتيجة" else "التالي") }
         }
     }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("الإعدادات", style = MaterialTheme.typography.headlineSmall)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("الوضع الليلي")
-            Switch(checked = dark, onCheckedChange = onDark)
+}
+
+/** شاشة النتيجة النهائية مع خيارات إعادة الاختبار. */
+@Composable
+fun ResultStep(state: ExamState, aiEngine: GeminiAIEngine, scope: CoroutineScope) {
+    val total = state.questions.size.coerceAtLeast(1)
+    val percent = state.score * 100 / total
+    val message = when {
+        percent >= 80 -> "ممتاز! مستواك رائع 🎉"
+        percent >= 50 -> "كويس، بس محتاج مراجعة بسيطة 👍"
+        else -> "محتاج تراجع الدروس دي تاني 💪"
+    }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        GradientCard(title = "النتيجة: ${state.score} / ${state.questions.size}", subtitle = message)
+        if (state.errorMsg.isNotBlank()) {
+            Text(state.errorMsg, color = MaterialTheme.colorScheme.error)
         }
-        Card(Modifier.fillMaxWidth().clickable {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-                if (!am.canScheduleExactAlarms()) {
-                    ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                    Toast.makeText(ctx, "الرجاء السماح بالمنبهات الدقيقة", Toast.LENGTH_SHORT).show()
+        Button(
+            onClick = { generateExam(state, aiEngine, scope) },
+            enabled = !state.examLoading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (state.examLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+            } else {
+                Text("امتحان جديد في نفس الدروس")
+            }
+        }
+        OutlinedButton(onClick = { state.step = 4 }, modifier = Modifier.fillMaxWidth()) {
+            Text("اختيار دروس أخرى")
+        }
+        OutlinedButton(onClick = { state.resetAll() }, modifier = Modifier.fillMaxWidth()) {
+            Text("البدء من جديد")
+        }
+    }
+}
+
+/** الشاشة الرئيسية للامتحانات: توزّع الخطوات حسب state.step. */
+@Composable
+fun ExamWizardTab(
+    aiEngine: GeminiAIEngine,
+    repo: CurriculumRepository,
+    state: ExamState,
+    scope: CoroutineScope,
+    modifier: Modifier = Modifier
+) {
+    // زر الرجوع في الهاتف يرجع خطوة داخل المعالج بدل الخروج من التطبيق.
+    BackHandler(enabled = state.step in 1..6) { examGoBack(state) }
+
+    Column(modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        when (state.step) {
+            0 -> WizardOptionStep("اختر الصف الدراسي", AppConfig.GRADES, false, {}) { grade ->
+                state.grade = grade
+                state.step = 1
+            }
+
+            1 -> WizardOptionStep("اختر النظام", AppConfig.SYSTEMS, true, { examGoBack(state) }) { system ->
+                state.system = system
+                state.step = 2
+            }
+
+            2 -> {
+                // الصف الأول الثانوي ليس فيه شعب، لذلك نعرض خياراً واحداً.
+                val streams = if (state.grade == AppConfig.GRADES.first()) {
+                    listOf(AppConfig.GENERAL_STREAM)
+                } else {
+                    AppConfig.STREAMS
+                }
+                WizardOptionStep("اختر الشعبة", streams, true, { examGoBack(state) }) { stream ->
+                    state.stream = stream
+                    state.step = 3
                 }
             }
-            picker.launch(Intent(RingtoneManager.ACTION_RINGTONE_PICKER).putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM))
-        }) {
-            Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("نغمة المنبه")
-                Text(ringtone ?: "افتراضية")
+
+            3 -> WizardOptionStep("اختر المادة", subjectsFor(state.stream), true, { examGoBack(state) }) { subject ->
+                state.subject = subject
+                state.step = 4
+                loadCurriculum(state, repo, scope)
+            }
+
+            4 -> LessonPickerStep(state, repo, aiEngine, scope)
+            5 -> QuizStep(state)
+            else -> ResultStep(state, aiEngine, scope)
+        }
+    }
+}
+
+// =========================================================================================
+// 18. شاشة الإعدادات (Profile Tab)
+// - تشغيل/إيقاف الوضع الليلي.
+// - اختيار نغمة المنبه (RingtonePicker) وحفظها في SharedPreferences.
+// - فتح إعدادات النظام للسماح بالمنبهات الدقيقة.
+// =========================================================================================
+
+/** اسم النغمة المحفوظة للعرض (أو "الافتراضية" لو لم تُختر نغمة). */
+fun ringtoneTitle(ctx: Context, uriString: String?): String {
+    if (uriString.isNullOrBlank()) return "الافتراضية"
+    return try {
+        RingtoneManager.getRingtone(ctx, Uri.parse(uriString))?.getTitle(ctx) ?: "نغمة مخصصة"
+    } catch (e: Exception) {
+        "نغمة مخصصة"
+    }
+}
+
+/** قراءة الـ Uri الذي اختاره المستخدم من نتيجة RingtonePicker (مع مراعاة اختلاف الـ API). */
+@Suppress("DEPRECATION")
+fun extractPickedUri(data: Intent): Uri? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+    } else {
+        data.getParcelableExtra<Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+    }
+}
+
+/** يفتح شاشة النظام الخاصة بالسماح بالمنبهات الدقيقة (أندرويد 12+ فقط). */
+fun openExactAlarmSettings(ctx: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                .setData(Uri.parse("package:" + ctx.packageName))
+            ctx.startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "تعذّر فتح إعدادات المنبهات الدقيقة", Toast.LENGTH_SHORT).show()
+        }
+    } else {
+        Toast.makeText(ctx, "جهازك لا يحتاج هذه الصلاحية", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/** شاشة الإعدادات: الوضع الليلي + نغمة المنبه + صلاحية المنبهات الدقيقة. */
+@Composable
+fun ProfileTab(
+    dark: Boolean,
+    onDark: (Boolean) -> Unit,
+    prefs: SharedPreferences,
+    modifier: Modifier = Modifier
+) {
+    val ctx = LocalContext.current
+    var ringtoneName by remember { mutableStateOf(ringtoneTitle(ctx, prefs.getString(AppConfig.KEY_RINGTONE, null))) }
+    var exactAllowed by remember { mutableStateOf(canUseExactAlarms(ctx)) }
+
+    // نحدّث حالة صلاحية المنبهات الدقيقة كلما رجع المستخدم للتطبيق من شاشة الإعدادات.
+    DisposableEffect(Unit) {
+        val lifecycle = (ctx as? ComponentActivity)?.lifecycle
+        val observer = object : LifecycleEventObserver {
+            // عند عودة المستخدم للتطبيق نعيد فحص صلاحية المنبهات الدقيقة.
+            override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                if (event == Lifecycle.Event.ON_RESUME) exactAllowed = canUseExactAlarms(ctx)
+            }
+        }
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
+    }
+
+    val ringtonePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        if (res.resultCode == Activity.RESULT_OK) {
+            val picked = res.data?.let { extractPickedUri(it) }
+            if (picked != null) {
+                prefs.edit().putString(AppConfig.KEY_RINGTONE, picked.toString()).apply()
+            } else {
+                prefs.edit().remove(AppConfig.KEY_RINGTONE).apply()
+            }
+            ringtoneName = ringtoneTitle(ctx, prefs.getString(AppConfig.KEY_RINGTONE, null))
+        }
+    }
+
+    /** يفتح شاشة اختيار النغمة مع تحديد النغمة الحالية. */
+    fun openRingtonePicker() {
+        val saved = prefs.getString(AppConfig.KEY_RINGTONE, null)
+        val current: Uri = if (!saved.isNullOrBlank()) {
+            Uri.parse(saved)
+        } else {
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        }
+        val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "اختر نغمة المنبه")
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+            putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, current)
+        }
+        ringtonePicker.launch(intent)
+    }
+
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            "الإعدادات",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        // ---- الوضع الليلي ----
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("الوضع الليلي", color = MaterialTheme.colorScheme.onSurface)
+                Switch(checked = dark, onCheckedChange = onDark)
+            }
+        }
+
+        // ---- نغمة المنبه ----
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("نغمة المنبه", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    "الحالية: $ringtoneName",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                Button(onClick = { openRingtonePicker() }) {
+                    Icon(Icons.Filled.MusicNote, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("اختيار نغمة")
+                }
+            }
+        }
+
+        // ---- صلاحية المنبهات الدقيقة ----
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("المنبهات الدقيقة", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    if (exactAllowed) {
+                        "الحالة: مفعّلة ✅ المنبه يرن في الثانية المحددة بالضبط."
+                    } else {
+                        "الحالة: غير مفعّلة ⚠️ المنبه قد يتأخر قليلاً. فعّلها لدقة أعلى."
+                    },
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                OutlinedButton(onClick = { openExactAlarmSettings(ctx) }) {
+                    Icon(Icons.Filled.Alarm, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("فتح إعدادات المنبهات الدقيقة")
+                }
             }
         }
     }
