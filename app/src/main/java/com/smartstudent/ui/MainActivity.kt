@@ -110,15 +110,12 @@ object AppConfig {
     const val ALARM_CHANNEL_ID = "smartstudent_alarm_channel"
     const val EXTRA_TASK_TITLE = "title"
     const val ALARM_RING_MILLIS = 30_000L
-    const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
+    const val OPENAI_BASE_URL = "https://api.openai.com/v1/chat/completions"
 
-    // قائمة الموديلات الجديدة والمحدثة
     val FALLBACK_MODELS: List<String> = listOf(
-    "gemini-3.8-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-2.5-flash"
-    )
+    "gpt-4o-mini",
+    "gpt-4o"
+)
 
     val GRADES: List<String> = listOf("الأول الثانوي", "الثاني الثانوي", "الثالث الثانوي")
     val SYSTEMS: List<String> = listOf("عام", "لغات", "أزهر")
@@ -403,9 +400,8 @@ class ExamState {
 // - نظام التبديل التلقائي (Fallback): لو موديل فشل ينتقل للتالي في حلقة حتى ينجح أحدهم.
 // - مفتاح الـ API من BuildConfig.GEMINI_API_KEY.
 // =========================================================================================
-class GeminiAIEngine {
+  class GeminiAIEngine {
 
-    /** عميل الشبكة. المهلة 90 ثانية للقراءة لأن بعض الموديلات "بتفكر" قبل الرد. */
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
@@ -413,78 +409,58 @@ class GeminiAIEngine {
         .callTimeout(120, TimeUnit.SECONDS)
         .build()
 
-    /** مفتاح الـ API كما تم حقنه وقت البناء. */
-    private val apiKey: String = BuildConfig.GEMINI_API_KEY.trim()
+    // هنا نقرا المفتاح الجديد بتاع OpenAI
+    private val apiKey: String = BuildConfig.OPENAI_API_KEY.trim()
 
-    /** تعليمات النظام للمساعد الدراسي في شاشة الدردشة. */
     private val chatSystemPrompt: String =
         "أنت \"الطالب الذكي\"، مساعد دراسي لطلاب الثانوية العامة في مصر. " +
-            "اشرح بأسلوب بسيط ومرتب وبخطوات واضحة، وبالعربية (يُفضّل بلهجة مصرية مبسطة). " +
-            "التزم بالمنهج المصري، وإذا لم تكن متأكداً من معلومة فقل ذلك بوضوح. " +
-            "إذا أرسل الطالب صورة سؤال فحلّه وشرح الفكرة وراء الحل."
+            "اشرح بأسلوب بسيط ومرتب وبخطوات واضحة، وبالعربية. " +
+            "التزم بالمنهج المصري، وإذا لم تكن متأكداً من معلومة فقل ذلك بوضوح."
 
-    /**
-     * الدالة الأساسية لإرسال الطلب. تجرب الموديلات واحداً تلو الآخر.
-     * @param payload جسم الطلب بصيغة JSON.
-     * @param jsonMode لو true نطلب من Gemini إرجاع JSON صرف (يُستخدم عند جلب المنهج).
-     */
-    private suspend fun makeRequest(payload: JSONObject, jsonMode: Boolean = false): AIResponse =
-        withContext(Dispatchers.IO) {
-            if (apiKey.isBlank()) {
-                return@withContext AIResponse("مفتاح API غير موجود. تأكد من ضبط GEMINI_API_KEY في ملف البناء.", true)
-            }
-            if (jsonMode) {
-                payload.put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
-            }
-            val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            var lastError = "لا توجد تفاصيل للخطأ"
+    private suspend fun makeRequest(payload: JSONObject): AIResponse = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank() || apiKey == "YOUR_API_KEY_HERE") {
+            return@withContext AIResponse("مفتاح OpenAI غير موجود. تأكد من ضبط OPENAI_API_KEY.", true)
+        }
+        
+        val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        var lastError = "لا توجد تفاصيل للخطأ"
 
-            for (model in AppConfig.FALLBACK_MODELS) {
-                ensureActive() // لو المستخدم خرج من الشاشة نوقف المحاولات
-                val request = Request.Builder()
-                    .url("${AppConfig.GEMINI_BASE_URL}$model:generateContent")
-                    .header("x-goog-api-key", apiKey)
-                    .post(body)
-                    .build()
-                try {
-                    client.newCall(request).execute().use { response ->
-                        val raw = response.body?.string().orEmpty()
-                        if (response.isSuccessful) {
-                            val text = extractText(raw)
+        for (model in AppConfig.FALLBACK_MODELS) {
+            ensureActive()
+            
+            // بنغير اسم الموديل جوه الـ Payload قبل ما نبعته
+            payload.put("model", model)
+
+            val request = Request.Builder()
+                .url(AppConfig.OPENAI_BASE_URL)
+                .header("Authorization", "Bearer $apiKey") // الهيدر بتاع OpenAI
+                .post(body)
+                .build()
+                
+            try {
+                client.newCall(request).execute().use { response ->
+                    val raw = response.body?.string().orEmpty()
+                    if (response.isSuccessful) {
+                        val root = JSONObject(raw)
+                        val choices = root.optJSONArray("choices")
+                        if (choices != null && choices.length() > 0) {
+                            val text = choices.getJSONObject(0).optJSONObject("message")?.optString("content").orEmpty()
                             if (text.isNotBlank()) {
                                 return@withContext AIResponse(text)
                             }
-                            lastError = "الموديل $model رجّع رداً فارغاً"
-                        } else {
-                            lastError = "خطأ ${response.code} في موديل $model: ${extractErrorMessage(raw)}"
                         }
+                        lastError = "الموديل $model رجّع رداً فارغاً"
+                    } else {
+                        lastError = "خطأ ${response.code} في موديل $model: ${extractErrorMessage(raw)}"
                     }
-                } catch (e: Exception) {
-                    lastError = "فشل الاتصال بموديل $model: ${e.message}"
                 }
+            } catch (e: Exception) {
+                lastError = "فشل الاتصال بموديل $model: ${e.message}"
             }
-            AIResponse("فشلت كل محاولات الاتصال بالذكاء الاصطناعي.\n$lastError", true)
         }
-
-    /** يستخرج النص من رد Gemini (يتجاهل أجزاء "التفكير" ويجمع باقي الأجزاء). */
-    private fun extractText(raw: String): String {
-        return try {
-            val candidates = JSONObject(raw).optJSONArray("candidates") ?: return ""
-            if (candidates.length() == 0) return ""
-            val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return ""
-            val sb = StringBuilder()
-            for (i in 0 until parts.length()) {
-                val part = parts.optJSONObject(i) ?: continue
-                if (part.optBoolean("thought", false)) continue
-                sb.append(part.optString("text", ""))
-            }
-            sb.toString().trim()
-        } catch (e: Exception) {
-            ""
-        }
+        AIResponse("فشلت كل محاولات الاتصال.\n$lastError", true)
     }
 
-    /** يستخرج رسالة الخطأ المختصرة من رد الخطأ (أو يرجع بداية الرد الخام). */
     private fun extractErrorMessage(raw: String): String {
         return try {
             JSONObject(raw).optJSONObject("error")?.optString("message").orEmpty().ifBlank { raw.take(120) }
@@ -493,181 +469,67 @@ class GeminiAIEngine {
         }
     }
 
-    /** يحوّل نصاً واحداً إلى جسم طلب بسيط (user prompt). */
-    private fun simplePayload(prompt: String): JSONObject {
-        val parts = JSONArray().put(JSONObject().put("text", prompt))
-        val contents = JSONArray().put(JSONObject().put("role", "user").put("parts", parts))
-        return JSONObject().put("contents", contents)
-    }
-
-    /**
-     * الدردشة: نرسل آخر رسائل المحادثة (بدون رسائل الخطأ)، ولو فيه صورة نرفقها بآخر رسالة للمستخدم.
-     */
     suspend fun chat(history: List<ChatMessage>, imageBase64: String? = null): AIResponse {
-        val usable = history
-            .filter { !it.isError && it.text.isNotBlank() }
-            .takeLast(10)
-            .dropWhile { !it.isUser }
+        val usable = history.filter { !it.isError && it.text.isNotBlank() }.takeLast(10).dropWhile { !it.isUser }
         if (usable.isEmpty()) return AIResponse("لا توجد رسالة لإرسالها.", true)
 
-        val contents = JSONArray()
-        usable.forEachIndexed { index, msg ->
-            val parts = JSONArray().put(JSONObject().put("text", msg.text))
-            val isLastUserMessage = index == usable.lastIndex && msg.isUser
-            if (isLastUserMessage && imageBase64 != null) {
-                parts.put(
-                    JSONObject().put(
-                        "inlineData",
-                        JSONObject().put("mimeType", "image/jpeg").put("data", imageBase64)
-                    )
-                )
-            }
-            contents.put(JSONObject().put("role", if (msg.isUser) "user" else "model").put("parts", parts))
+        val messagesArray = JSONArray()
+        
+        // إضافة تعليمات النظام
+        messagesArray.put(JSONObject().put("role", "system").put("content", chatSystemPrompt))
+
+        // إضافة رسائل المحادثة
+        usable.forEach { msg ->
+            messagesArray.put(JSONObject().put("role", if (msg.isUser) "user" else "assistant").put("content", msg.text))
         }
-        val payload = JSONObject()
-            .put("contents", contents)
-            .put(
-                "systemInstruction",
-                JSONObject().put("parts", JSONArray().put(JSONObject().put("text", chatSystemPrompt)))
-            )
+        
+        val payload = JSONObject().put("messages", messagesArray)
+        
+        // لو في صورة مرفقة
+        if (imageBase64 != null && usable.last().isUser) {
+             val lastMsg = messagesArray.getJSONObject(messagesArray.length() - 1)
+             val contentArray = JSONArray()
+             contentArray.put(JSONObject().put("type", "text").put("text", lastMsg.getString("content")))
+             contentArray.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$imageBase64")))
+             lastMsg.put("content", contentArray)
+        }
+
         return makeRequest(payload)
     }
 
-    /**
-     * يطلب من Gemini أبواب ودروس المادة حسب المنهج المصري الحقيقي بصيغة JSON صارمة.
-     * الشكل المطلوب: {"chapters":[{"title":"...","lessons":["...","..."]}]}
-     */
     suspend fun generateCurriculum(grade: String, system: String, stream: String, subject: String): AIResponse {
         val prompt = """
             أنت خبير في المناهج الرسمية لوزارة التربية والتعليم في مصر.
-            اذكر أبواب ودروس مادة "$subject" للصف "$grade" بنظام "$system" والشعبة "$stream"،
-            حسب المنهج المصري الحقيقي والمعتمد حالياً، وبترتيب الكتاب المدرسي.
-            أرجع JSON صارماً فقط، بدون أي نص قبله أو بعده وبدون Markdown، بهذا الشكل بالضبط:
-            {"chapters":[{"title":"اسم الباب","lessons":["اسم الدرس 1","اسم الدرس 2"]}]}
-            الشروط: من 3 إلى 10 أبواب، وكل باب من 2 إلى 8 دروس، والأسماء بالعربية (أو الإنجليزية لمادة اللغة الإنجليزية).
+            اذكر أبواب ودروس مادة "$subject" للصف "$grade" بنظام "$system" والشعبة "$stream".
+            أرجع JSON صارماً فقط بهذا الشكل: {"chapters":[{"title":"اسم الباب","lessons":["الدرس 1","الدرس 2"]}]}
         """.trimIndent()
-        return makeRequest(simplePayload(prompt), jsonMode = true)
+        
+        val messagesArray = JSONArray().put(JSONObject().put("role", "user").put("content", prompt))
+        val payload = JSONObject()
+            .put("messages", messagesArray)
+            .put("response_format", JSONObject().put("type", "json_object")) // إجبار OpenAI على إرجاع JSON
+            
+        return makeRequest(payload)
     }
 
-    /**
-     * يولّد امتحاناً من 5 أسئلة اختيار من متعدد بالتنسيق الصارم:
-     * Q: السؤال، O1..O4: الخيارات، C: رقم الإجابة الصحيحة، E: الشرح.
-     */
-    suspend fun generateInteractiveExam(
-        grade: String,
-        system: String,
-        stream: String,
-        subject: String,
-        topics: String
-    ): AIResponse {
+    suspend fun generateInteractiveExam(grade: String, system: String, stream: String, subject: String, topics: String): AIResponse {
         val prompt = """
-            أنت معلم مصري متخصص. اكتب اختباراً تفاعلياً من 5 أسئلة اختيار من متعدد لمادة $subject
-            (الصف: $grade، النظام: $system، الشعبة: $stream) حسب المنهج المصري.
-            الدروس المطلوبة: $topics.
-            التزم بهذا التنسيق حرفياً لكل سؤال، كل عنصر في سطر مستقل، بدون Markdown وبدون أي مقدمة أو خاتمة:
-            Q: [نص السؤال]
-            O1: [الخيار الأول]
-            O2: [الخيار الثاني]
-            O3: [الخيار الثالث]
-            O4: [الخيار الرابع]
-            C: [رقم الإجابة الصحيحة من 1 إلى 4]
-            E: [شرح مختصر للإجابة الصحيحة]
+            أنت معلم. اكتب اختباراً تفاعلياً من 5 أسئلة لمادة $subject (الصف: $grade، الشعبة: $stream).
+            الدروس: $topics.
+            التنسيق:
+            Q: [سؤال]
+            O1: [خيار]
+            O2: [خيار]
+            O3: [خيار]
+            O4: [خيار]
+            C: [رقم الصح 1-4]
+            E: [الشرح]
         """.trimIndent()
-        return makeRequest(simplePayload(prompt))
+        
+        val messagesArray = JSONArray().put(JSONObject().put("role", "user").put("content", prompt))
+        return makeRequest(JSONObject().put("messages", messagesArray))
     }
-}
-
-// =========================================================================================
-// 8. مستودع المنهج (Curriculum Repository)
-// بدل البيانات الثابتة (Mock Data) صار المنهج يُجلب من Gemini ويُحلَّل من JSON،
-// مع تخزين مؤقت في الذاكرة حتى لا نكرر الطلب لنفس المادة.
-// =========================================================================================
-
-/** واجهة المستودع. */
-interface CurriculumRepository {
-    /** يرجع أبواب ودروس المادة (نجاح بقائمة، أو فشل برسالة). */
-    suspend fun getChapters(grade: String, system: String, stream: String, subject: String): CurriculumResult
-}
-
-/** تنفيذ المستودع الذي يعتمد على Gemini. */
-class AiCurriculumRepository(private val aiEngine: GeminiAIEngine) : CurriculumRepository {
-
-    /** كاش بسيط في الذاكرة: المفتاح هو (الصف|النظام|الشعبة|المادة). */
-    private val cache = mutableMapOf<String, List<Chapter>>()
-
-    /** يرجع الأبواب من الكاش لو موجودة، وإلا يطلبها من Gemini ويحللها. */
-    override suspend fun getChapters(
-        grade: String,
-        system: String,
-        stream: String,
-        subject: String
-    ): CurriculumResult {
-        val key = "$grade|$system|$stream|$subject"
-        cache[key]?.let { return CurriculumResult.Success(it) }
-
-        val response = aiEngine.generateCurriculum(grade, system, stream, subject)
-        if (response.isError) return CurriculumResult.Failure(response.text)
-
-        return try {
-            val chapters = CurriculumParser.parse(response.text)
-            if (chapters.isEmpty()) {
-                CurriculumResult.Failure("الذكاء الاصطناعي لم يرجّع أبواباً مفهومة. جرّب مرة أخرى.")
-            } else {
-                cache[key] = chapters
-                CurriculumResult.Success(chapters)
-            }
-        } catch (e: Exception) {
-            CurriculumResult.Failure("تعذّر قراءة المنهج (الرد ليس JSON صحيحاً). جرّب مرة أخرى.")
-        }
-    }
-}
-
-/** محلل JSON الخاص بالمنهج: يحوّل رد Gemini إلى قائمة Chapters و Lessons باستخدام JSONObject/JSONArray. */
-object CurriculumParser {
-
-    /** يقصّ النص من أول { أو [ إلى آخر } أو ] لتجاهل أي كلام زائد أو علامات Markdown. */
-    private fun extractJsonBlock(raw: String): String {
-        val cleaned = raw.replace("```json", "").replace("```", "").trim()
-        val start = cleaned.indexOfFirst { it == '{' || it == '[' }
-        val end = cleaned.indexOfLast { it == '}' || it == ']' }
-        return if (start >= 0 && end > start) cleaned.substring(start, end + 1) else cleaned
-    }
-
-    /** التحليل الرئيسي. يدعم رد على شكل {"chapters":[...]} أو مصفوفة مباشرة [...]. */
-    fun parse(raw: String): List<Chapter> {
-        val json = extractJsonBlock(raw)
-        val chaptersArray: JSONArray = if (json.trimStart().startsWith("[")) {
-            JSONArray(json)
-        } else {
-            JSONObject(json).optJSONArray("chapters") ?: JSONArray()
-        }
-
-        val result = mutableListOf<Chapter>()
-        for (i in 0 until chaptersArray.length()) {
-            val chapterObj = chaptersArray.optJSONObject(i) ?: continue
-            val chapterTitle = chapterObj.optString("title", "").trim()
-            val lessonsArray = chapterObj.optJSONArray("lessons") ?: continue
-            val chapterId = (i + 1) * 1000L
-
-            val lessons = mutableListOf<Lesson>()
-            for (j in 0 until lessonsArray.length()) {
-                val item = lessonsArray.opt(j)
-                val lessonTitle: String = when (item) {
-                    is String -> item
-                    is JSONObject -> item.optString("title", item.optString("name", ""))
-                    else -> ""
-                }
-                if (lessonTitle.isNotBlank()) {
-                    lessons.add(Lesson(chapterId + j + 1, lessonTitle.trim()))
-                }
-            }
-            if (chapterTitle.isNotBlank() && lessons.isNotEmpty()) {
-                result.add(Chapter(chapterId, chapterTitle, lessons))
-            }
-        }
-        return result
-    }
-}
+  }  
 
 // =========================================================================================
 // 9. محلل الامتحان (Quiz Parser)
