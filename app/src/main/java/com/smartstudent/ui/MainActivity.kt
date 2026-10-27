@@ -531,6 +531,99 @@ class ExamState {
     }
   }  
 
+  // =========================================================================================
+// 8. مستودع المنهج (Curriculum Repository)
+// =========================================================================================
+
+/** واجهة المستودع. */
+interface CurriculumRepository {
+    /** يرجع أبواب ودروس المادة (نجاح بقائمة، أو فشل برسالة). */
+    suspend fun getChapters(grade: String, system: String, stream: String, subject: String): CurriculumResult
+}
+
+/** تنفيذ المستودع الذي يعتمد على الذكاء الاصطناعي. */
+class AiCurriculumRepository(private val aiEngine: GeminiAIEngine) : CurriculumRepository {
+
+    /** كاش بسيط في الذاكرة: المفتاح هو (الصف|النظام|الشعبة|المادة). */
+    private val cache = mutableMapOf<String, List<Chapter>>()
+
+    /** يرجع الأبواب من الكاش لو موجودة، وإلا يطلبها من الذكاء الاصطناعي ويحللها. */
+    override suspend fun getChapters(
+        grade: String,
+        system: String,
+        stream: String,
+        subject: String
+    ): CurriculumResult {
+        val key = "$grade|$system|$stream|$subject"
+        cache[key]?.let { return CurriculumResult.Success(it) }
+
+        val response = aiEngine.generateCurriculum(grade, system, stream, subject)
+        if (response.isError) return CurriculumResult.Failure(response.text)
+
+        return try {
+            val chapters = CurriculumParser.parse(response.text)
+            if (chapters.isEmpty()) {
+                CurriculumResult.Failure("الذكاء الاصطناعي لم يرجّع أبواباً مفهومة. جرّب مرة أخرى.")
+            } else {
+                cache[key] = chapters
+                CurriculumResult.Success(chapters)
+            }
+        } catch (e: Exception) {
+            CurriculumResult.Failure("تعذّر قراءة المنهج (الرد ليس JSON صحيحاً). جرّب مرة أخرى.")
+        }
+    }
+}
+
+/** محلل JSON الخاص بالمنهج: يحوّل رد الذكاء الاصطناعي إلى قائمة Chapters و Lessons. */
+object CurriculumParser {
+
+    /** يقصّ النص من أول { أو [ إلى آخر } أو ] لتجاهل أي كلام زائد أو علامات Markdown. */
+    private fun extractJsonBlock(raw: String): String {
+        val cleaned = raw.replace("```json", "").replace("```", "").trim()
+        val start = cleaned.indexOfFirst { it == '{' || it == '[' }
+        val end = cleaned.indexOfLast { it == '}' || it == ']' }
+        return if (start >= 0 && end > start) cleaned.substring(start, end + 1) else cleaned
+    }
+
+    /** التحليل الرئيسي. يدعم رد على شكل {"chapters":[...]} أو مصفوفة مباشرة [...]. */
+    fun parse(raw: String): List<Chapter> {
+        val json = extractJsonBlock(raw)
+        val chaptersArray: JSONArray = if (json.trimStart().startsWith("[")) {
+            JSONArray(json)
+        } else {
+            JSONObject(json).optJSONArray("chapters") ?: JSONArray()
+        }
+
+        val result = mutableListOf<Chapter>()
+        for (i in 0 until chaptersArray.length()) {
+            val chapterObj = chaptersArray.optJSONObject(i) ?: continue
+            val chapterTitle = chapterObj.optString("title", "").trim()
+            val lessonsArray = chapterObj.optJSONArray("lessons") ?: continue
+            val chapterId = (i + 1) * 1000L
+
+            val lessons = mutableListOf<Lesson>()
+            for (j in 0 until lessonsArray.length()) {
+                val item = lessonsArray.opt(j)
+                val lessonTitle: String = when (item) {
+                    is String -> item
+                    is JSONObject -> item.optString("title", item.optString("name", ""))
+                    else -> ""
+                }
+                if (lessonTitle.isNotBlank()) {
+                    lessons.add(Lesson(chapterId + j + 1, lessonTitle.trim()))
+                }
+            }
+            if (chapterTitle.isNotBlank() && lessons.isNotEmpty()) {
+                result.add(Chapter(chapterId, chapterTitle, lessons))
+            }
+        }
+        return result
+    }
+}
+
+// =========================================================================================
+// 9. محلل الامتحان (Quiz Parser)
+// =========================================================================================
 // =========================================================================================
 // 9. محلل الامتحان (Quiz Parser)
 // يحوّل نص Gemini ذي التنسيق (Q / O1-O4 / C / E) إلى قائمة QuizQuestion.
