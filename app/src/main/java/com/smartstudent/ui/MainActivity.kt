@@ -103,64 +103,36 @@ import org.json.JSONObject
 // وخيارات شاشة الامتحانات (الصف / النظام / الشعبة).
 // =========================================================================================
 object AppConfig {
-    /** اسم ملف الإعدادات المحلي. */
     const val PREFS_NAME = "smartstudent_prefs"
-
-    /** مفتاح حفظ حالة الوضع الليلي. */
     const val KEY_DARK = "dark"
-
-    /** مفتاح حفظ مسار نغمة المنبه المختارة. */
     const val KEY_RINGTONE = "ringtone"
-
-    /** مفتاح حفظ قائمة المهام بصيغة JSON. */
     const val KEY_TASKS = "tasks_json"
-
-    /** معرّف قناة الإشعارات الخاصة بالمنبهات. */
     const val ALARM_CHANNEL_ID = "smartstudent_alarm_channel"
-
-    /** اسم الـ Extra الذي يحمل عنوان المهمة داخل الـ Intent. */
     const val EXTRA_TASK_TITLE = "title"
-
-    /** أقصى مدة (بالمللي ثانية) يظل فيها صوت المنبه شغالاً. */
     const val ALARM_RING_MILLIS = 30_000L
-
-    /** عنوان الـ API الأساسي لـ Gemini. */
     const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
 
-    /**
-     * الموديلات الاحتياطية بالترتيب. لو الأول فشل (404 أو أي خطأ) ننتقل للتالي تلقائياً.
-     * تم تحديث هذه القائمة بناءً على رسالة خطأ Google التي تطلب استخدام الموديلات الجديدة.
-     *
-     val FALLBACK_MODELS: List<String> = listOf(
-    "gemini-4-argon",
-    "gemini-3.8-flash",
-    "gemini-3.1-pro-preview"
-)
+    // قائمة الموديلات الجديدة والمحدثة
+    val FALLBACK_MODELS: List<String> = listOf(
+        "gemini-4-argon",
+        "gemini-3.8-flash",
+        "gemini-3.1-pro-preview"
     )
 
-    /** خيارات الصف الدراسي. */
     val GRADES: List<String> = listOf("الأول الثانوي", "الثاني الثانوي", "الثالث الثانوي")
-
-    /** خيارات النظام التعليمي. */
     val SYSTEMS: List<String> = listOf("عام", "لغات", "أزهر")
-
-    /** اسم الشعبة العامة للصف الأول الثانوي (لا توجد شعب في الصف الأول). */
     const val GENERAL_STREAM = "عام (بدون شعبة)"
-
-    /** خيارات الشعبة من الصف الثاني الثانوي وما بعده. */
     val STREAMS: List<String> = listOf("علمي علوم", "علمي رياضة", "أدبي")
 }
 
-/**
- * ترجع قائمة المواد المتاحة بحسب الشعبة المختارة.
- * هذه أسماء مواد فقط (خيارات للواجهة) وليست محتوى منهج.
- */
 fun subjectsFor(stream: String): List<String> = when (stream) {
     "علمي علوم" -> listOf("أحياء", "كيمياء", "فيزياء", "لغة عربية", "لغة إنجليزية")
     "علمي رياضة" -> listOf("رياضيات", "فيزياء", "كيمياء", "لغة عربية", "لغة إنجليزية")
     "أدبي" -> listOf("تاريخ", "جغرافيا", "فلسفة ومنطق", "علم نفس واجتماع", "لغة عربية", "لغة إنجليزية")
     else -> listOf("أحياء", "كيمياء", "فيزياء", "رياضيات", "لغة عربية", "لغة إنجليزية")
 }
+
+    /** اسم 
 
 // =========================================================================================
 // 3. الكلاسات الأساسية: Application و BroadcastReceiver للمنبه
