@@ -130,12 +130,12 @@ object AppConfig {
     /**
      * الموديلات الاحتياطية بالترتيب. لو الأول فشل (404 أو أي خطأ) ننتقل للتالي تلقائياً.
      * تم تحديث هذه القائمة بناءً على رسالة خطأ Google التي تطلب استخدام الموديلات الجديدة.
-     */
-    val FALLBACK_MODELS: List<String> = listOf(
-        "gemini-3.1-pro-preview",
-        "gemini-3.1-flash-preview",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-pro-latest"
+     *
+     val FALLBACK_MODELS: List<String> = listOf(
+    "gemini-4-argon",
+    "gemini-3.8-flash",
+    "gemini-3.1-pro-preview"
+)
     )
 
     /** خيارات الصف الدراسي. */
