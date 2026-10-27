@@ -422,7 +422,6 @@ class ExamState {
             return@withContext AIResponse("مفتاح OpenAI غير موجود. تأكد من ضبط OPENAI_API_KEY.", true)
         }
         
-        val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         var lastError = "لا توجد تفاصيل للخطأ"
 
         for (model in AppConfig.FALLBACK_MODELS) {
@@ -430,6 +429,9 @@ class ExamState {
             
             // بنغير اسم الموديل جوه الـ Payload قبل ما نبعته
             payload.put("model", model)
+            // تحويل الطلب لنص بعد إضافة اسم الموديل
+val body = payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+
 
             val request = Request.Builder()
                 .url(AppConfig.OPENAI_BASE_URL)
